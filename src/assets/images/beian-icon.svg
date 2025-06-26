@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="20px" height="20px" viewBox="0 0 20 20" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <g id="beian-icon" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <path d="M10,0 C4.48,0 0,4.48 0,10 C0,15.52 4.48,20 10,20 C15.52,20 20,15.52 20,10 C20,4.48 15.52,0 10,0 Z M10,18 C5.59,18 2,14.41 2,10 C2,5.59 5.59,2 10,2 C14.41,2 18,5.59 18,10 C18,14.41 14.41,18 10,18 Z" id="Shape" fill="#FFFFFF" fill-rule="nonzero"></path>
+        <polygon id="Path" fill="#FFFFFF" fill-rule="nonzero" points="9 5 11 5 11 11 9 11"></polygon>
+        <path d="M10,15 C10.5522847,15 11,14.5522847 11,14 C11,13.4477153 10.5522847,13 10,13 C9.44771525,13 9,13.4477153 9,14 C9,14.5522847 9.44771525,15 10,15 Z" id="Oval" fill="#FFFFFF" fill-rule="nonzero"></path>
+    </g>
+</svg> 

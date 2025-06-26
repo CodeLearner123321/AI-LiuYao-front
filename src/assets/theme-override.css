@@ -1,0 +1,198 @@
+/* Element Plus样式覆盖 */
+
+/* 下拉框样式 */
+.el-select-dropdown {
+  background-color: #222 !important;
+  border: 1px solid #444 !important;
+  border-radius: 4px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.el-select-dropdown.is-multiple .el-select-dropdown__item.selected {
+  background-color: rgba(230, 200, 76, 0.1) !important;
+}
+
+.el-select-dropdown__item {
+  color: #ddd !important;
+  background-color: #222 !important;
+}
+
+.el-select-dropdown__item.hover {
+  background-color: #333 !important;
+}
+
+.el-select-dropdown__item.selected {
+  color: #e6c84c !important;
+  font-weight: bold !important;
+  background-color: rgba(230, 200, 76, 0.1) !important;
+}
+
+.el-select-dropdown__empty {
+  color: #999 !important;
+  background-color: #222 !important;
+}
+
+/* 修复弹出层 */
+.el-popper {
+  background-color: #222 !important;
+  border-color: #444 !important;
+}
+
+.el-popper.is-light {
+  background-color: #222 !important;
+  border: none !important;
+}
+
+.el-popper__arrow::before {
+  background-color: #222 !important;
+  border-color: #444 !important;
+}
+
+.el-popper__arrow::after {
+  background-color: #222 !important;
+}
+
+/* 滚动条 */
+.el-scrollbar__view {
+  background-color: #222 !important;
+}
+
+/* 列表选项 */
+.el-select-dropdown__list {
+  background-color: #222 !important;
+  padding: 0 !important;
+}
+
+/* 移除下拉箭头 */
+.el-popper__arrow {
+  display: none !important;
+}
+
+/* 修复下拉项选中标记 */
+.el-select-dropdown__item.selected::after {
+  display: none !important;
+}
+
+/* 确保各种下拉组件背景色统一 */
+.el-select-dropdown, 
+.el-dropdown-menu,
+.el-picker-panel,
+.el-time-panel {
+  background-color: #222 !important;
+}
+
+/* 确保选项内部元素也是深色背景 */
+.el-select-dropdown__item * {
+  background-color: transparent !important;
+}
+
+/* 修复下拉框中的选项组 */
+.el-select-group__wrap, 
+.el-select-group__title {
+  background-color: #222 !important;
+  color: #888 !important;
+}
+
+/* 修复悬停状态的样式 */
+.el-select-dropdown__item:not(.is-disabled):hover {
+  background-color: #333 !important;
+}
+
+/* 处理多级弹出菜单 */
+.el-cascader-menu, 
+.el-cascader-menu__wrap,
+.el-cascader-node {
+  background-color: #222 !important;
+  color: #ddd !important;
+}
+
+/* 确保弹出菜单的容器也是深色 */
+.el-popper, 
+.el-select__popper,
+.el-picker__popper,
+.el-dropdown__popper,
+.el-cascader__dropdown,
+.el-tooltip__popper {
+  background-color: #222 !important;
+  color: #ddd !important;
+}
+
+/* 添加!important到更多元素 */
+.el-select-dropdown,
+.el-dropdown-menu,
+.el-dropdown-menu__item,
+.el-menu--popup,
+.el-cascader-panel,
+.el-color-dropdown,
+.el-autocomplete-suggestion,
+.el-autocomplete-suggestion__list {
+  background-color: #222 !important;
+  color: #ddd !important;
+}
+
+/* 确保下拉框中所有内容都有深色背景 */
+.el-select-dropdown *,
+.el-dropdown-menu *,
+.el-cascader-menu * {
+  background-color: #222 !important;
+}
+
+/* 覆盖内联样式 */
+[style*="background-color: white"],
+[style*="background-color: #fff"],
+[style*="background-color:#fff"],
+[style*="background: white"],
+[style*="background:#fff"],
+[style*="background: #fff"] {
+  background-color: #222 !important;
+}
+
+/* 使用高权重选择器修复白色背景问题 */
+html body .el-select-dropdown {
+  background-color: #222 !important;
+}
+
+html body .el-select-dropdown__list {
+  background-color: #222 !important;
+}
+
+html body .el-select-dropdown__item {
+  background-color: #222 !important;
+  color: #ddd !important;
+}
+
+html body .el-select-dropdown__item:hover,
+html body .el-select-dropdown__item.hover {
+  background-color: #333 !important;
+}
+
+html body .el-select-dropdown__item.selected {
+  color: #e6c84c !important;
+  background-color: rgba(230, 200, 76, 0.1) !important;
+}
+
+/* 强制覆盖所有内联样式 */
+.el-popper[style] {
+  background-color: #222 !important;
+  border-color: #444 !important;
+}
+
+.el-select-dropdown[style] {
+  background-color: #222 !important;
+  border-color: #444 !important;
+}
+
+/* 修复下拉选择框特定部分 */
+#app .el-popper.is-pure, 
+#app .el-popper.is-light,
+#app .el-select__popper {
+  background-color: #222 !important;
+  border-color: #444 !important;
+}
+
+/* 移除不支持的:deep()选择器 */
+/* Shadow DOM内的样式修复 */
+.el-popper .el-select-dropdown__item,
+.el-select-dropdown * {
+  background-color: #222 !important;
+} 
