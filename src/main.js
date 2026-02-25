@@ -1,4 +1,6 @@
 import './assets/main.css'
+import './assets/mobile.css'
+import './assets/mobile-fixes.css'
 import './assets/theme-override.css'
 
 import { createApp } from 'vue'

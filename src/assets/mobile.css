@@ -1,0 +1,150 @@
+/* 移动端专用样式文件 */
+
+/* 基础移动端优化 */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* 允许文本选择 */
+p, h1, h2, h3, h4, h5, h6, span, div, a {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* 移动端触摸优化 */
+button, a, .btn, .feature-card {
+  -webkit-tap-highlight-color: rgba(230, 200, 76, 0.3);
+  touch-action: manipulation;
+}
+
+/* 移动端字体大小优化 */
+@media (max-width: 480px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  html {
+    font-size: 13px;
+  }
+}
+
+/* 移动端容器优化 */
+@media (max-width: 768px) {
+  .container {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 15px;
+    padding-right: 15px;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+/* 移动端间距优化 */
+@media (max-width: 768px) {
+  section {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  section {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+/* 移动端按钮优化 */
+@media (max-width: 480px) {
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* 移动端卡片优化 */
+@media (max-width: 768px) {
+  .feature-card, .hero-container {
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* 移动端导航优化 */
+@media (max-width: 768px) {
+  nav, .navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+}
+
+/* 移动端滚动优化 */
+@media (max-width: 768px) {
+  html, body {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* 移动端图片优化 */
+@media (max-width: 768px) {
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* 移动端表单优化 */
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px; /* 防止iOS缩放 */
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+}
+
+/* 移动端动画优化 */
+@media (max-width: 768px) {
+  * {
+    animation-duration: 0.3s !important;
+    transition-duration: 0.3s !important;
+  }
+}
+
+/* 移动端阴影优化 */
+@media (max-width: 768px) {
+  .feature-card:hover {
+    transform: none;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* 移动端链接优化 */
+@media (max-width: 768px) {
+  a {
+    padding: 8px 0;
+    display: inline-block;
+  }
+}

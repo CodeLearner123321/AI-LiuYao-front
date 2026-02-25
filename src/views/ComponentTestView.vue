@@ -290,6 +290,8 @@ if (isLoggedIn.value) {
 
 .component-test {
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   background-color: #f5f5f5;
   color: #333;
   padding-bottom: 50px;

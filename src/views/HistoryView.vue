@@ -1,5 +1,7 @@
 <script setup>
 import { ref, onMounted, reactive, computed } from 'vue';
+import NavBar from '@/components/NavBar.vue';
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue';
 import api from '../services/api';
 import { ElMessage, ElLoading } from 'element-plus';
 
@@ -7,6 +9,7 @@ import { ElMessage, ElLoading } from 'element-plus';
 const historyList = ref([]); // 历史记录列表
 const selectedHistory = ref(null); // 当前选中的历史记录
 const loading = ref(false); // 加载状态
+const accuracyRate = ref(0); // 准确率
 const sidebarCollapsed = ref(false); // 侧边栏是否折叠
 const analysisResult = ref(''); // AI分析结果
 const keyOutcome = ref(''); // 结果判辞
@@ -15,6 +18,20 @@ const chineseCalendar = ref(null); // 中国历日期
 const questionDescription = ref(''); // 问题描述
 const questionBackground = ref(''); // 问题背景
 const selectedHexagramType = ref(''); // 选中的卦象类型
+
+// 悬停和操作按钮相关
+const hoveredHistoryId = ref(null); // 当前悬停的历史记录ID
+const hoverTimer = ref(null); // 悬停计时器
+const hideTimer = ref(null); // 隐藏计时器
+const showActionButtons = ref(null); // 显示操作按钮的历史记录ID
+const showDeleteConfirm = ref(false); // 是否显示删除确认弹窗
+const deleteTargetId = ref(null); // 待删除的历史记录ID
+const deleting = ref(false); // 删除中状态
+
+// 反馈相关
+const showFeedbackModal = ref(false); // 是否显示反馈弹窗
+const feedbackTargetId = ref(null); // 待反馈的历史记录ID
+const feedbackSubmitting = ref(false); // 反馈提交中状态
 
 // 卦象类型列表
 const hexagramTypes = [
@@ -30,7 +47,10 @@ const loadHistoryList = async () => {
     const response = await api.get('/api/liuyao/history');
     
     if (response.data && response.data.code === 200) {
-      historyList.value = response.data.data || [];
+      // 处理新的返回结构
+      const data = response.data.data;
+      historyList.value = data.aiLiuyaoHistoryVOS || [];
+      accuracyRate.value = data.accuracyRate || 0;
       
       // 如果有历史记录，默认选中第一条
       if (historyList.value.length > 0) {
@@ -47,11 +67,144 @@ const loadHistoryList = async () => {
   }
 };
 
+// 处理历史记录悬停
+const handleHistoryMouseEnter = (history) => {
+  hoveredHistoryId.value = history.id;
+  
+  // 清除之前的隐藏计时器
+  if (hideTimer.value) {
+    clearTimeout(hideTimer.value);
+    hideTimer.value = null;
+  }
+  
+  // 立即显示操作按钮
+  showActionButtons.value = history.id;
+};
+
+// 处理历史记录离开
+const handleHistoryMouseLeave = () => {
+  hoveredHistoryId.value = null;
+  
+  // 清除悬停计时器
+  if (hoverTimer.value) {
+    clearTimeout(hoverTimer.value);
+    hoverTimer.value = null;
+  }
+  
+  // 立即隐藏操作按钮
+  showActionButtons.value = null;
+};
+
+// 打开删除确认弹窗
+const openDeleteConfirm = (historyId, event) => {
+  event.stopPropagation(); // 阻止选择历史记录
+  deleteTargetId.value = historyId;
+  showDeleteConfirm.value = true;
+};
+
+// 关闭删除确认弹窗
+const closeDeleteConfirm = () => {
+  showDeleteConfirm.value = false;
+  deleteTargetId.value = null;
+};
+
+// 删除历史记录
+const deleteHistory = async () => {
+  if (!deleteTargetId.value) return;
+  
+  deleting.value = true;
+  try {
+    const response = await api.get(`/api/liuyao/history/delete/${deleteTargetId.value}`);
+    
+    if (response.data && response.data.code === 200) {
+      ElMessage.success('删除成功');
+      
+      // 从列表中移除该记录
+      const deletedIndex = historyList.value.findIndex(h => h.id === deleteTargetId.value);
+      historyList.value.splice(deletedIndex, 1);
+      
+      // 如果删除的是当前选中的记录，清空选中状态
+      if (selectedHistory.value?.id === deleteTargetId.value) {
+        selectedHistory.value = null;
+        hexagramResult.value = null;
+        analysisResult.value = '';
+        
+        // 如果还有其他记录，选中第一条
+        if (historyList.value.length > 0) {
+          selectHistory(historyList.value[0]);
+        }
+      }
+      
+      closeDeleteConfirm();
+    } else {
+      ElMessage.error('删除失败：' + (response.data?.msg || '未知错误'));
+    }
+  } catch (error) {
+    console.error('删除历史记录出错:', error);
+    ElMessage.error('删除失败，请稍后重试');
+  } finally {
+    deleting.value = false;
+  }
+};
+
+// 打开反馈弹窗
+const openFeedback = (historyId, event) => {
+  event.stopPropagation(); // 阻止选择历史记录
+  feedbackTargetId.value = historyId;
+  showFeedbackModal.value = true;
+};
+
+// 关闭反馈弹窗
+const closeFeedbackModal = () => {
+  showFeedbackModal.value = false;
+  feedbackTargetId.value = null;
+};
+
+// 提交反馈
+const submitFeedback = async (isAccurate) => {
+  if (!feedbackTargetId.value) return;
+  
+  feedbackSubmitting.value = true;
+  try {
+    const response = await api.post('/api/liuyao/history/feedback', {
+      id: feedbackTargetId.value,
+      isAccurate: isAccurate
+    });
+    
+    if (response.data && response.data.code === 200) {
+      ElMessage.success(isAccurate === 1 ? '感谢您的肯定反馈！' : '感谢您的反馈，我们会持续改进！');
+      
+      // 更新列表中对应记录的 isAccurate 字段
+      const targetHistory = historyList.value.find(h => h.id === feedbackTargetId.value);
+      if (targetHistory) {
+        targetHistory.isAccurate = isAccurate;
+      }
+      
+      // 如果反馈的是当前选中的记录，也更新选中记录
+      if (selectedHistory.value && selectedHistory.value.id === feedbackTargetId.value) {
+        selectedHistory.value.isAccurate = isAccurate;
+      }
+      
+      closeFeedbackModal();
+    } else {
+      // 关闭弹窗，让错误消息能够显示
+      closeFeedbackModal();
+      ElMessage.error('反馈失败：' + (response.data?.msg || '未知错误'));
+    }
+  } catch (error) {
+    console.error('提交反馈出错:', error);
+    // 关闭弹窗，让错误消息能够显示
+    closeFeedbackModal();
+    ElMessage.error('反馈失败，请稍后重试');
+  } finally {
+    feedbackSubmitting.value = false;
+  }
+};
+
 // 选择历史记录
 const selectHistory = async (history) => {
   try {
-    loading.value = true;
-    // 首先设置基本信息
+    // 首先设置基本信息（不显示loading，避免影响滚动条）
     selectedHistory.value = history;
     keyOutcome.value = history.keyOutcome || '';
     
@@ -230,20 +383,20 @@ const formatDateString = (date, format) => {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
-// 格式化分析文本，处理换行和特殊标记
-const formatAnalysisText = (text) => {
-  if (!text) return '';
+// Markdown 解析现在由 MarkdownRenderer 组件处理
+
+// 格式化持续时间（秒转换为分钟秒）
+const formatDuration = (seconds) => {
+  if (!seconds && seconds !== 0) return '';
   
-  // 不再替换换行符，保留原始的\n
-  let formattedText = text;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
   
-  // 处理标题格式如：【标题】
-  formattedText = formattedText.replace(/【([^】]+)】/g, '<div class="paragraph-title">$1</div>');
-  
-  // 处理关键词强调
-  formattedText = formattedText.replace(/\*\*([^*]+)\*\*/g, '<span class="highlight-text">$1</span>');
-  
-  return formattedText;
+  if (minutes > 0) {
+    return `${minutes}分${remainingSeconds}秒`;
+  } else {
+    return `${remainingSeconds}秒`;
+  }
 };
 
 // 计算是否显示卦象结果区域
@@ -289,13 +442,21 @@ const isYangYao = (yaos, index) => {
 
 <template>
   <div class="history-view">
+    <NavBar />
     <div class="history-container">
       <!-- 侧边栏 -->
       <div :class="sidebarClass">
-        <div class="sidebar-header">
-          <h2>历史记录</h2>
-          <button class="toggle-btn" @click="toggleSidebar">
-            <i class="toggle-icon">{{ sidebarCollapsed ? '→' : '←' }}</i>
+        <div class="sidebar-header" :class="{ 'clickable': sidebarCollapsed }" @click="sidebarCollapsed && toggleSidebar()">
+          <div class="header-content">
+            <h2>历史记录</h2>
+            <div v-if="!sidebarCollapsed && accuracyRate > 0" class="accuracy-rate">
+              正确率: {{ (accuracyRate * 100).toFixed(1) }}%
+            </div>
+          </div>
+          <button v-if="!sidebarCollapsed" class="toggle-btn" @click.stop="toggleSidebar">
+            <svg class="toggle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
           </button>
         </div>
         
@@ -316,9 +477,57 @@ const isYangYao = (yaos, index) => {
               class="history-item"
               :class="{ 'active': selectedHistory && selectedHistory.id === history.id }"
               @click="selectHistory(history)"
+              @mouseenter="handleHistoryMouseEnter(history)"
+              @mouseleave="handleHistoryMouseLeave"
             >
-              <div class="history-question">{{ history.question }}</div>
-              <div class="history-outcome">{{ history.keyOutcome }}</div>
+              <!-- 操作按钮 -->
+              <transition name="action-slide">
+                <div v-if="showActionButtons === history.id" class="action-buttons">
+                  <button 
+                    class="action-btn delete-btn" 
+                    @click="openDeleteConfirm(history.id, $event)"
+                    title="删除记录"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" 
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button 
+                    class="action-btn feedback-btn" 
+                    @click="openFeedback(history.id, $event)"
+                    title="反馈建议"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" 
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </transition>
+              
+              <div class="history-question-row">
+                <div class="history-question">{{ history.question }}</div>
+                <div class="history-meta-info">
+                  <span class="history-duration" v-if="history.durationSeconds !== null && history.durationSeconds !== undefined">
+                    {{ formatDuration(history.durationSeconds) }}
+                  </span>
+                  <span class="history-amount" v-if="history.amount">
+                    {{ history.amount }}点
+                  </span>
+                </div>
+              </div>
+              <div class="history-outcome">
+                <span class="outcome-text">{{ history.keyOutcome }}</span>
+                <svg v-if="history.isAccurate === 1" class="accuracy-icon accurate" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" 
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <svg v-else-if="history.isAccurate === 0" class="accuracy-icon inaccurate" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" 
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
             </div>
           </div>
         </div>
@@ -344,33 +553,41 @@ const isYangYao = (yaos, index) => {
       <div v-if="showResult && hexagramResult" id="hexagram-result" class="hexagram-result">
         <h2 class="result-title">卦象结果</h2>
         
-        <div>
-          <span>时间: {{ hexagramResult.localDateTime ? formatDateString(new Date(hexagramResult.localDateTime), 'YYYY-MM-DD HH:mm') : '' }} 
-          {{ new Date(hexagramResult.localDateTime).toLocaleDateString('zh-CN', { weekday: 'long' }) }}</span>
+        <div v-if="hexagramResult.localDateTime || hexagramResult.customTime">
+          <span>时间:
+    <template v-if="hexagramResult.localDateTime">
+      {{ formatDateString(new Date(hexagramResult.localDateTime), 'YYYY-MM-DD HH:mm') }} 
+      {{ new Date(hexagramResult.localDateTime).toLocaleDateString('zh-CN', { weekday: 'long' }) }}
+    </template>
+    <template v-else-if="hexagramResult.customTime">
+      {{ hexagramResult.customTime }}
+    </template>
+        </span>
         </div>
 
-        <div>
+        <div v-if="questionDescription">
           <span>问题: {{ questionDescription }}</span>
         </div>
 
-        <div>
+        <div v-if="questionBackground">
           <span>背景: {{ questionBackground }}</span>
         </div>
 
-        <div>
+        <div v-if="selectedHexagramType">
           <span>起卦类型: {{ hexagramTypes.find(type => type.value === selectedHexagramType)?.label || selectedHexagramType }}</span>
         </div>
         
-        <div>
-          <span>干支: {{ chineseCalendar?.year }}
-            <span class="highlight-text">{{ chineseCalendar?.month }}</span>
-            <span class="highlight-text">{{ " " + chineseCalendar?.day }}</span>
-            (<span class="highlight-text">{{ chineseCalendar?.dayToNull }}</span> 空)
-            <span class="highlight-text">{{ chineseCalendar?.hour }}</span>
+        <div v-if="chineseCalendar && (chineseCalendar.year || chineseCalendar.month || chineseCalendar.day || chineseCalendar.hour)">
+          <span>干支: 
+            <span v-if="chineseCalendar.year">{{ chineseCalendar.year }}</span>
+            <span v-if="chineseCalendar.month" class="highlight-text">{{ chineseCalendar.month }}</span>
+            <span v-if="chineseCalendar.day" class="highlight-text">{{ " " + chineseCalendar.day }}</span>
+            <span v-if="chineseCalendar.dayToNull">(<span class="highlight-text">{{ chineseCalendar.dayToNull }}</span> 空)</span>
+            <span v-if="chineseCalendar.hour" class="highlight-text">{{ chineseCalendar.hour }}</span>
           </span>
         </div>
         
-        <div>
+        <div v-if="hexagramResult.shenSha && hexagramResult.shenSha.length > 0">
           <span>神煞: 
             <span v-for="(sha, index) in hexagramResult.shenSha" :key="index">
               {{ sha }}{{ index < hexagramResult.shenSha.length - 1 ? ' ' : '' }}
@@ -563,7 +780,11 @@ const isYangYao = (yaos, index) => {
                   
                     
                     <!-- 解析文本 -->
-                    <div class="analysis-text silk-content" v-if="analysisResult" v-html="formatAnalysisText(analysisResult)"></div>
+                    <MarkdownRenderer 
+                      v-if="analysisResult"
+                      :content="analysisResult"
+                      class="analysis-text silk-content"
+                    />
                     
                     <!-- 落款与印章 -->
                     <div class="signature-area">
@@ -590,12 +811,137 @@ const isYangYao = (yaos, index) => {
         </div>
       </div>
     </div>
+    
+    <!-- 删除确认弹窗 -->
+    <transition name="modal-fade">
+      <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="closeDeleteConfirm">
+        <div class="delete-confirm-modal">
+          <div class="modal-header">
+            <div class="modal-icon delete-icon">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 class="modal-title">确认删除</h3>
+          </div>
+          
+          <div class="modal-content">
+            <p>您确定要删除这条历史记录吗？</p>
+            <p class="modal-warning">此操作无法撤销</p>
+          </div>
+          
+          <div class="modal-actions">
+            <button 
+              class="modal-btn cancel-btn" 
+              @click="closeDeleteConfirm"
+              :disabled="deleting"
+            >
+              取消
+            </button>
+            <button 
+              class="modal-btn confirm-btn" 
+              @click="deleteHistory"
+              :disabled="deleting"
+            >
+              <span v-if="!deleting">确认删除</span>
+              <span v-else class="deleting-text">
+                <span class="spinner"></span>
+                删除中...
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
+    
+    <!-- 反馈弹窗 -->
+    <transition name="modal-fade">
+      <div v-if="showFeedbackModal" class="modal-overlay" @click.self="closeFeedbackModal">
+        <div class="feedback-modal">
+          <div class="modal-header">
+            <div class="modal-icon feedback-icon">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" 
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 class="modal-title">反馈结果准确性</h3>
+          </div>
+          
+          <div class="modal-content">
+            <p class="feedback-question">这次占卜结果是否准确？</p>
+            <p class="feedback-hint">
+              
+            </p>
+          </div>
+          
+          <div class="feedback-actions">
+            <button 
+              class="feedback-option accurate-option" 
+              @click="submitFeedback(1)"
+              :disabled="feedbackSubmitting"
+            >
+              <div class="option-icon accurate">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" 
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="option-content">
+                <div class="option-title">准确</div>
+                <div class="option-desc">结果符合预期</div>
+              </div>
+            </button>
+            
+            <button 
+              class="feedback-option inaccurate-option" 
+              @click="submitFeedback(0)"
+              :disabled="feedbackSubmitting"
+            >
+              <div class="option-icon inaccurate">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" 
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="option-content">
+                <div class="option-title">不准确</div>
+                <div class="option-desc">结果有偏差</div>
+              </div>
+            </button>
+          </div>
+          
+          <div class="feedback-footer">
+            <button 
+              class="modal-btn cancel-btn small" 
+              @click="closeFeedbackModal"
+              :disabled="feedbackSubmitting"
+            >
+              取消
+            </button>
+          </div>
+          
+          <!-- 提交中的遮罩 -->
+          <transition name="fade">
+            <div v-if="feedbackSubmitting" class="submitting-overlay">
+              <div class="submitting-content">
+                <span class="spinner large"></span>
+                <span class="submitting-text">提交中...</span>
+              </div>
+            </div>
+          </transition>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
 <style scoped>
 .history-view {
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   background-color: var(--dark-bg);
   color: var(--text-light);
   display: flex;
@@ -604,186 +950,594 @@ const isYangYao = (yaos, index) => {
 
 .history-container {
   display: flex;
-  height: 100vh;
+  height: calc(100vh - 60px);
+  height: calc(100svh - 60px);
+  height: calc(100dvh - 60px);
   position: relative;
   overflow: hidden; /* 防止整体滚动 */
 }
 
 /* 侧边栏样式 */
 .history-sidebar {
-  width: 320px;
-  background-color: #1a1a1a;
-  border-right: 1px solid #333;
-  transition: width 0.3s ease, transform 0.3s ease;
-  height: 100vh;
+  width: 340px;
+  background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%);
+  border-right: 1px solid rgba(255, 215, 0, 0.15);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  height: 100%;
   display: flex;
   flex-direction: column;
   position: relative;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3), 
+              inset -1px 0 0 rgba(255, 215, 0, 0.05);
   z-index: 10;
+  backdrop-filter: blur(10px);
+}
+
+.history-sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(to bottom, 
+    transparent 0%, 
+    rgba(255, 215, 0, 0.3) 20%, 
+    rgba(255, 215, 0, 0.3) 80%, 
+    transparent 100%);
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .history-sidebar.collapsed {
-  width: 50px;
+  width: 60px;
 }
 
 .sidebar-header {
-  padding: 20px;
+  padding: 24px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #333;
-  background-color: #181818;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border-bottom: 2px solid rgba(255, 215, 0, 0.1);
+  background: linear-gradient(135deg, 
+    rgba(26, 26, 26, 0.95) 0%, 
+    rgba(30, 30, 30, 0.95) 100%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3),
+              inset 0 -1px 0 rgba(255, 215, 0, 0.2);
   z-index: 2;
+  position: relative;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.header-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-header.clickable {
+  cursor: pointer;
+  justify-content: center;
+}
+
+.sidebar-header.clickable:hover {
+  background: linear-gradient(135deg, 
+    rgba(35, 35, 35, 0.95) 0%, 
+    rgba(40, 40, 40, 0.95) 100%);
+  box-shadow: 0 4px 16px rgba(255, 215, 0, 0.15),
+              inset 0 -1px 0 rgba(255, 215, 0, 0.3);
+}
+
+.sidebar-header.clickable::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, 
+    rgba(255, 215, 0, 0.1) 0%, 
+    transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-header.clickable:hover::before {
+  opacity: 1;
+}
+
+.sidebar-header::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, 
+    transparent 0%, 
+    rgba(255, 215, 0, 0.4) 50%, 
+    transparent 100%);
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-header.clickable:hover::after {
+  opacity: 1;
 }
 
 .sidebar-header h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   color: var(--primary-color);
-  font-weight: bold;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(255, 215, 0, 0.3),
+               0 0 20px rgba(255, 215, 0, 0.1);
+  letter-spacing: 1px;
+  font-family: 'SimSun', 'STKaiti', 'KaiTi', serif;
+  transition: all 0.3s ease;
+  writing-mode: horizontal-tb;
+}
+
+.accuracy-rate {
+  font-size: 0.85rem;
+  color: rgba(255, 215, 0, 0.75);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 4px rgba(255, 215, 0, 0.2);
+  font-family: 'Arial', sans-serif;
+  transition: all 0.3s ease;
+  animation: accuracyFadeIn 0.5s ease;
+}
+
+@keyframes accuracyFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.history-sidebar.collapsed .sidebar-header h2 {
+  writing-mode: vertical-rl;
+  font-size: 1.1rem;
+  letter-spacing: 3px;
 }
 
 .toggle-btn {
-  background: none;
+  background: transparent;
   border: none;
-  color: #aaa;
+  color: rgba(255, 215, 0, 0.6);
   cursor: pointer;
-  font-size: 1.2rem;
-  padding: 5px;
-  transition: all 0.3s ease;
-  width: 30px;
-  height: 30px;
+  padding: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.toggle-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, 
+    rgba(255, 215, 0, 0.1) 0%, 
+    rgba(255, 215, 0, 0.05) 100%);
+  border-radius: 8px;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.toggle-btn:hover::before {
+  opacity: 1;
 }
 
 .toggle-btn:hover {
   color: var(--primary-color);
-  background-color: rgba(255, 215, 0, 0.1);
-  transform: scale(1.1);
+  transform: translateX(-3px);
+}
+
+.toggle-btn:hover .toggle-icon {
+  filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.6));
+}
+
+.toggle-btn:active {
+  transform: translateX(-1px) scale(0.95);
+}
+
+.toggle-icon {
+  width: 20px;
+  height: 20px;
+  transition: all 0.3s ease;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  position: relative;
+  z-index: 1;
 }
 
 .sidebar-content {
   flex: 1;
   overflow-y: auto;
-  padding: 0;
+  padding: 8px 0;
   /* 使左侧滚动条独立 */
   position: relative;
-  height: calc(100vh - 70px); /* 减去header高度 */
+  height: calc(100% - 70px); /* 减去header高度 */
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 215, 0, 0.3) #1a1a1a;
+  scrollbar-color: rgba(255, 215, 0, 0.4) rgba(0, 0, 0, 0.2);
+  background: linear-gradient(to bottom, 
+    rgba(255, 215, 0, 0.02) 0%, 
+    transparent 10%, 
+    transparent 90%, 
+    rgba(0, 0, 0, 0.3) 100%);
 }
 
 .sidebar-content::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .sidebar-content::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  margin: 8px 0;
 }
 
 .sidebar-content::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 215, 0, 0.3);
-  border-radius: 6px;
+  background: linear-gradient(to bottom, 
+    rgba(255, 215, 0, 0.4) 0%, 
+    rgba(255, 215, 0, 0.6) 50%, 
+    rgba(255, 215, 0, 0.4) 100%);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  box-shadow: inset 0 0 6px rgba(255, 215, 0, 0.3);
+  transition: all 0.3s ease;
 }
 
 .sidebar-content::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 215, 0, 0.5);
+  background: linear-gradient(to bottom, 
+    rgba(255, 215, 0, 0.6) 0%, 
+    rgba(255, 215, 0, 0.8) 50%, 
+    rgba(255, 215, 0, 0.6) 100%);
+  box-shadow: inset 0 0 8px rgba(255, 215, 0, 0.5),
+              0 0 8px rgba(255, 215, 0, 0.3);
 }
 
 .history-list {
   display: flex;
   flex-direction: column;
-  padding-bottom: 20px;
+  padding: 0 10px 20px;
+  gap: 8px;
 }
 
 .history-item {
-  padding: 18px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 20px 18px 20px 48px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  overflow: hidden;
-  background-color: rgba(0, 0, 0, 0.1);
-  margin: 0 5px 5px 5px;
-  border-radius: 6px;
+  overflow: visible;
+  background: linear-gradient(135deg, 
+    rgba(20, 20, 20, 0.6) 0%, 
+    rgba(26, 26, 26, 0.4) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(5px);
 }
 
-.history-item:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  transform: translateY(-2px);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
-}
-
-.history-item.active {
-  background-color: rgba(255, 215, 0, 0.08);
-  border-left: 3px solid var(--primary-color);
-}
-
-.history-item.active::before {
+.history-item::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
-  width: 3px;
+  width: 4px;
   height: 100%;
-  background: linear-gradient(to bottom, var(--primary-color), transparent);
-  opacity: 0.8;
+  background: linear-gradient(to bottom, 
+    transparent 0%, 
+    rgba(255, 215, 0, 0.3) 50%, 
+    transparent 100%);
+  opacity: 0;
+  transition: all 0.4s ease;
+}
+
+.history-item::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.1) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  transition: all 0.6s ease;
+  pointer-events: none;
+}
+
+.history-item:hover {
+  background: linear-gradient(135deg, 
+    rgba(30, 30, 30, 0.8) 0%, 
+    rgba(35, 35, 35, 0.6) 100%);
+  transform: translateX(4px);
+  border-color: rgba(255, 215, 0, 0.2);
+  box-shadow: -2px 4px 16px rgba(0, 0, 0, 0.3),
+              inset 0 0 0 1px rgba(255, 215, 0, 0.1);
+}
+
+.history-item:hover::before {
+  opacity: 1;
+  width: 3px;
+}
+
+.history-item:hover::after {
+  width: 120%;
+  height: 120%;
+}
+
+.history-item.active {
+  background: linear-gradient(135deg, 
+    rgba(255, 215, 0, 0.12) 0%, 
+    rgba(255, 215, 0, 0.06) 100%);
+  border-color: rgba(255, 215, 0, 0.4);
+  box-shadow: -3px 4px 20px rgba(255, 215, 0, 0.15),
+              inset 0 0 20px rgba(255, 215, 0, 0.05),
+              inset 0 1px 0 rgba(255, 215, 0, 0.2);
+  transform: translateX(6px);
+}
+
+.history-item.active::before {
+  opacity: 1;
+  width: 4px;
+  background: linear-gradient(to bottom, 
+    rgba(255, 215, 0, 0.8) 0%, 
+    rgba(255, 215, 0, 1) 50%, 
+    rgba(255, 215, 0, 0.8) 100%);
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+}
+
+.history-question-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  position: relative;
+  z-index: 1;
 }
 
 .history-question {
-  font-weight: bold;
-  margin-bottom: 12px;
-  font-size: 0.95rem;
-  color: #ddd;
-  line-height: 1.4;
+  font-weight: 600;
+  font-size: 0.98rem;
+  color: #e8e8e8;
+  line-height: 1.5;
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
 }
 
+.history-item:hover .history-question {
+  color: #fff;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.2);
+}
+
+.history-item.active .history-question {
+  color: var(--primary-color);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4),
+               0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+/* 元数据信息容器 */
+.history-meta-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* 时间显示 - 简洁无边框 */
+.history-duration {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: rgba(255, 215, 0, 0.7);
+  white-space: nowrap;
+  transition: all 0.3s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.history-item:hover .history-duration {
+  color: rgba(255, 215, 0, 0.9);
+}
+
+.history-item.active .history-duration {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+/* 金额显示 */
+.history-amount {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255, 215, 0, 0.8);
+  white-space: nowrap;
+  transition: all 0.3s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.history-item:hover .history-amount {
+  color: rgba(255, 215, 0, 1);
+}
+
+.history-item.active .history-amount {
+  color: var(--primary-color);
+  font-weight: 600;
+  text-shadow: 0 0 6px rgba(255, 215, 0, 0.3);
+}
+
+/* 结果容器 */
 .history-outcome {
-  font-size: 0.9rem;
-  color: #e6c84c;
+  font-size: 0.88rem;
+  color: #e8d469;
   font-style: italic;
-  line-height: 1.6;
-  padding-left: 10px;
-  border-left: 2px solid rgba(230, 200, 76, 0.5);
+  line-height: 1.7;
+  padding: 10px 14px 10px 14px;
+  border-left: 3px solid rgba(255, 215, 0, 0.4);
   position: relative;
-  background-color: rgba(0, 0, 0, 0.2);
-  padding: 8px 10px;
-  border-radius: 0 4px 4px 0;
+  background: linear-gradient(to right, 
+    rgba(255, 215, 0, 0.08) 0%, 
+    rgba(0, 0, 0, 0.15) 100%);
+  border-radius: 0 8px 8px 0;
+  margin-left: 2px;
+  transition: all 0.3s ease;
+  box-shadow: inset 2px 0 8px rgba(0, 0, 0, 0.2);
+  font-family: 'STKaiti', 'KaiTi', serif;
+  letter-spacing: 0.5px;
+  z-index: 1;
+}
+
+.outcome-text {
+  display: block;
+  padding-right: 24px;
+}
+
+.history-outcome::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(to bottom, 
+    transparent 0%, 
+    rgba(255, 215, 0, 0.8) 50%, 
+    transparent 100%);
+  filter: blur(2px);
+}
+
+.history-item:hover .history-outcome {
+  color: #f5e189;
+  border-left-color: rgba(255, 215, 0, 0.6);
+  background: linear-gradient(to right, 
+    rgba(255, 215, 0, 0.12) 0%, 
+    rgba(0, 0, 0, 0.2) 100%);
+  box-shadow: inset 2px 0 12px rgba(255, 215, 0, 0.1);
+}
+
+.history-item.active .history-outcome {
+  color: var(--primary-color);
+  border-left-color: var(--primary-color);
+  background: linear-gradient(to right, 
+    rgba(255, 215, 0, 0.18) 0%, 
+    rgba(255, 215, 0, 0.05) 100%);
+  box-shadow: inset 2px 0 16px rgba(255, 215, 0, 0.15),
+              0 0 8px rgba(255, 215, 0, 0.1);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4),
+               0 0 8px rgba(255, 215, 0, 0.2);
+}
+
+/* 准确性图标 - 定位在右下角 */
+.accuracy-icon {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  width: 12px;
+  height: 12px;
+  transition: all 0.3s ease;
+  opacity: 0.6;
+  z-index: 2;
+}
+
+.accuracy-icon.accurate {
+  color: #22c55e;
+  filter: drop-shadow(0 1px 2px rgba(34, 197, 94, 0.3));
+}
+
+.accuracy-icon.inaccurate {
+  color: #ef4444;
+  filter: drop-shadow(0 1px 2px rgba(239, 68, 68, 0.3));
+}
+
+.history-item:hover .accuracy-icon {
+  opacity: 0.9;
+  transform: scale(1.15);
+}
+
+.history-item:hover .accuracy-icon.accurate {
+  filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.6));
+}
+
+.history-item:hover .accuracy-icon.inaccurate {
+  filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.6));
+}
+
+.history-item.active .accuracy-icon {
+  opacity: 1;
+}
+
+.history-item.active .accuracy-icon.accurate {
+  filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.8));
+}
+
+.history-item.active .accuracy-icon.inaccurate {
+  filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.8));
 }
 
 .loading-state,
 .empty-state {
-  padding: 40px 20px;
+  padding: 60px 20px;
   text-align: center;
-  color: #888;
+  color: #999;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
+  min-height: 250px;
+  background: radial-gradient(circle at center, 
+    rgba(255, 215, 0, 0.03) 0%, 
+    transparent 70%);
+}
+
+.loading-state span {
+  color: var(--primary-color);
+  font-size: 0.95rem;
+  letter-spacing: 1px;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
 }
 
 .empty-state {
-  color: #666;
+  color: #777;
   font-style: italic;
+  font-size: 0.95rem;
 }
 
 .loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(230, 200, 76, 0.2);
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(255, 215, 0, 0.15);
   border-radius: 50%;
   border-top-color: var(--primary-color);
+  border-right-color: rgba(255, 215, 0, 0.6);
   display: inline-block;
-  margin-bottom: 15px;
-  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+  animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.2),
+              inset 0 0 20px rgba(255, 215, 0, 0.05);
+  position: relative;
+}
+
+.loading-spinner::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  border-top-color: rgba(255, 215, 0, 0.4);
+  animation: spin 0.8s linear infinite reverse;
 }
 
 @keyframes spin {
@@ -798,7 +1552,7 @@ const isYangYao = (yaos, index) => {
   overflow-y: auto;
   transition: all 0.3s ease;
   /* 使右侧滚动条独立 */
-  height: 100vh;
+  height: 100%;
   position: relative;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) var(--dark-bg);
@@ -1245,29 +1999,27 @@ const isYangYao = (yaos, index) => {
   border-radius: 8px;
 }
 
+/* 卦辞内容样式 - 书法古风韵味 */
 .oracle-content {
-  font-style: italic;
-  color: #e2c44b; /* 金黄色文本 */
-  font-family: 'Noto Serif SC', 'SimSun', serif;
-  text-shadow: 0 1px 1px rgba(0,0,0,0.1); /* 添加轻微文本阴影增强可读性 */
+  font-style: normal; /* 卦辞应为正体，去除 italic */
+  color: #f4d77e; /* 更亮眼的金色，突出卦辞 */
+  font-family: 'STKaiti', 'KaiTi', 'FZShuTi', 'HanyiSongyang', 'Noto Serif SC', 'SimSun', serif; /* 楷体/书法体优先 */
+  text-shadow: 
+    0 0 6px rgba(226, 196, 75, 0.45), /* 微弱金色发光 */
+    0 1px 2px rgba(0, 0, 0, 0.4); /* 立体阴影 */
+  text-align: center;
   display: block;
-  font-size: 1.1rem;
+  font-weight: 700; /* 加粗，突出权威感 */
+  font-size: 1.2rem; /* 增大字体，更醒目 */
+  letter-spacing: 2px; /* 增加字间距，增强古典感 */
+  line-height: 1.8; /* 增加行高，提升可读性 */
 }
 
-/* 解析文本 */
+/* analysis-text 容器样式 - Markdown 内容样式已由 MarkdownRenderer 组件控制 */
 .analysis-text {
-  color: #e2c44b; /* 金黄色文本 */
-  font-size: 1.1rem;
-  line-height: 1.9;
   position: relative;
   z-index: 1;
   margin: 25px 0;
-  font-family: 'Noto Serif SC', 'SimSun', serif;
-  text-align: justify;
-  letter-spacing: 1px;
-  text-shadow: 0 1px 1px rgba(0,0,0,0.1); /* 轻微文本阴影 */
-  text-indent: 2em; /* 首行缩进 */
-  white-space: pre-line; /* 保留换行符 */
 }
 
 /* 段落标题样式 */
@@ -1435,7 +2187,9 @@ const isYangYao = (yaos, index) => {
   }
 
   .history-content {
-    height: calc(100vh - 300px);
+    height: calc(100vh - 300px - 60px);
+    height: calc(100svh - 300px - 60px);
+    height: calc(100dvh - 300px - 60px);
     padding: 20px;
   }
   
@@ -1474,5 +2228,701 @@ const isYangYao = (yaos, index) => {
   text-shadow: 0 0 15px rgba(230, 200, 76, 0.4);
   letter-spacing: 2px;
   position: relative;
+}
+
+/* 操作按钮容器 */
+.action-buttons {
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 10;
+}
+
+/* 操作按钮基础样式 */
+.action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.action-btn svg {
+  width: 18px;
+  height: 18px;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.action-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 8px;
+}
+
+/* 删除按钮 - 融入金色主题 */
+.delete-btn {
+  background: linear-gradient(135deg, 
+    rgba(255, 140, 0, 0.6) 0%, 
+    rgba(200, 100, 0, 0.7) 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 160, 0, 0.4);
+}
+
+.delete-btn::before {
+  background: linear-gradient(135deg, 
+    rgba(255, 160, 0, 0.8) 0%, 
+    rgba(220, 120, 0, 0.9) 100%);
+}
+
+.delete-btn:hover {
+  transform: translateX(-4px) scale(1.05);
+  box-shadow: -2px 4px 16px rgba(255, 140, 0, 0.4),
+              inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 160, 0, 0.7);
+}
+
+.delete-btn:hover::before {
+  opacity: 1;
+}
+
+.delete-btn:hover svg {
+  filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
+  transform: scale(1.1);
+}
+
+.delete-btn:active {
+  transform: translateX(-2px) scale(0.98);
+}
+
+/* 反馈按钮 - 融入金色主题 */
+.feedback-btn {
+  background: linear-gradient(135deg, 
+    rgba(200, 180, 50, 0.6) 0%, 
+    rgba(160, 140, 30, 0.7) 100%);
+  color: #fff;
+  border: 1px solid rgba(220, 200, 80, 0.4);
+}
+
+.feedback-btn::before {
+  background: linear-gradient(135deg, 
+    rgba(230, 210, 80, 0.8) 0%, 
+    rgba(200, 180, 50, 0.9) 100%);
+}
+
+.feedback-btn:hover {
+  transform: translateX(-4px) scale(1.05);
+  box-shadow: -2px 4px 16px rgba(220, 200, 80, 0.4),
+              inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-color: rgba(230, 210, 80, 0.7);
+}
+
+.feedback-btn:hover::before {
+  opacity: 1;
+}
+
+.feedback-btn:hover svg {
+  filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
+  transform: scale(1.1);
+}
+
+.feedback-btn:active {
+  transform: translateX(-2px) scale(0.98);
+}
+
+/* 操作按钮动画 */
+.action-slide-enter-active {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.action-slide-leave-active {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.action-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-50%) translateX(-20px);
+}
+
+.action-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-50%) translateX(-20px);
+}
+
+/* 删除确认弹窗遮罩 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(8px);
+  padding: 20px;
+}
+
+/* 删除确认弹窗 */
+.delete-confirm-modal {
+  background: linear-gradient(145deg, #1a1a1a 0%, #242424 100%);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
+              0 0 0 1px rgba(255, 215, 0, 0.15),
+              0 0 40px rgba(255, 215, 0, 0.1);
+  overflow: hidden;
+  animation: modalSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid rgba(255, 215, 0, 0.4);
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  padding: 28px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(to bottom, 
+    rgba(220, 38, 38, 0.08) 0%, 
+    transparent 100%);
+}
+
+.modal-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.modal-icon.delete-icon {
+  background: linear-gradient(135deg, 
+    rgba(220, 38, 38, 0.15) 0%, 
+    rgba(185, 28, 28, 0.2) 100%);
+  border: 2px solid rgba(220, 38, 38, 0.3);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.1),
+              inset 0 2px 0 rgba(255, 255, 255, 0.1);
+}
+
+.modal-icon svg {
+  width: 32px;
+  height: 32px;
+  color: #ef4444;
+  filter: drop-shadow(0 2px 8px rgba(220, 38, 38, 0.4));
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content {
+  padding: 24px;
+  text-align: center;
+}
+
+.modal-content p {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: #ccc;
+  line-height: 1.6;
+}
+
+.modal-warning {
+  font-size: 0.9rem;
+  color: #ef4444;
+  font-style: italic;
+  margin-bottom: 0 !important;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+.modal-actions {
+  padding: 20px 24px;
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.modal-btn {
+  flex: 1;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.modal-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  background: linear-gradient(135deg, 
+    rgba(60, 60, 60, 0.8) 0%, 
+    rgba(40, 40, 40, 0.9) 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, 
+    rgba(80, 80, 80, 0.9) 0%, 
+    rgba(60, 60, 60, 0.9) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.confirm-btn {
+  background: linear-gradient(135deg, 
+    rgba(220, 38, 38, 0.9) 0%, 
+    rgba(185, 28, 28, 1) 100%);
+  color: #fff;
+  border: 1px solid rgba(220, 38, 38, 0.5);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, 
+    rgba(239, 68, 68, 1) 0%, 
+    rgba(220, 38, 38, 1) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.5),
+              inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.confirm-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.deleting-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 0.8s linear infinite;
+}
+
+/* 弹窗淡入淡出动画 */
+.modal-fade-enter-active {
+  transition: all 0.3s ease;
+}
+
+.modal-fade-leave-active {
+  transition: all 0.2s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-from .delete-confirm-modal,
+.modal-fade-leave-to .delete-confirm-modal {
+  transform: translateY(-20px) scale(0.95);
+}
+
+/* 反馈弹窗样式 */
+.feedback-modal {
+  background: linear-gradient(145deg, #1a1a1a 0%, #242424 100%);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
+              0 0 0 1px rgba(255, 215, 0, 0.15),
+              0 0 40px rgba(255, 215, 0, 0.1);
+  overflow: hidden;
+  animation: modalSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid rgba(255, 215, 0, 0.4);
+  position: relative;
+}
+
+.modal-icon.feedback-icon {
+  background: linear-gradient(135deg, 
+    rgba(34, 197, 94, 0.15) 0%, 
+    rgba(22, 163, 74, 0.2) 100%);
+  border: 2px solid rgba(34, 197, 94, 0.3);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1),
+              inset 0 2px 0 rgba(255, 255, 255, 0.1);
+}
+
+.modal-icon.feedback-icon svg {
+  color: #22c55e;
+  filter: drop-shadow(0 2px 8px rgba(34, 197, 94, 0.4));
+}
+
+.feedback-question {
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: #fff;
+  margin-bottom: 8px !important;
+}
+
+.feedback-hint {
+  font-size: 0.9rem;
+  color: #999;
+  margin-bottom: 0 !important;
+}
+
+.feedback-actions {
+  padding: 0 24px 24px;
+  display: flex;
+  gap: 16px;
+}
+
+.feedback-option {
+  flex: 1;
+  padding: 20px 16px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.feedback-option::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 12px;
+}
+
+.feedback-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.accurate-option {
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.accurate-option::before {
+  background: radial-gradient(circle at center, 
+    rgba(34, 197, 94, 0.1) 0%, 
+    transparent 70%);
+}
+
+.accurate-option:hover:not(:disabled) {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: linear-gradient(135deg, 
+    rgba(34, 197, 94, 0.08) 0%, 
+    rgba(34, 197, 94, 0.03) 100%);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(34, 197, 94, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.accurate-option:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.inaccurate-option {
+  border-color: rgba(234, 179, 8, 0.2);
+}
+
+.inaccurate-option::before {
+  background: radial-gradient(circle at center, 
+    rgba(234, 179, 8, 0.1) 0%, 
+    transparent 70%);
+}
+
+.inaccurate-option:hover:not(:disabled) {
+  border-color: rgba(234, 179, 8, 0.5);
+  background: linear-gradient(135deg, 
+    rgba(234, 179, 8, 0.08) 0%, 
+    rgba(234, 179, 8, 0.03) 100%);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(234, 179, 8, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.inaccurate-option:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.option-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.option-icon.accurate {
+  background: linear-gradient(135deg, 
+    rgba(34, 197, 94, 0.2) 0%, 
+    rgba(34, 197, 94, 0.1) 100%);
+  border: 2px solid rgba(34, 197, 94, 0.3);
+}
+
+.accurate-option:hover:not(:disabled) .option-icon.accurate {
+  background: linear-gradient(135deg, 
+    rgba(34, 197, 94, 0.3) 0%, 
+    rgba(34, 197, 94, 0.2) 100%);
+  border-color: rgba(34, 197, 94, 0.5);
+  transform: scale(1.1);
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+}
+
+.option-icon.inaccurate {
+  background: linear-gradient(135deg, 
+    rgba(234, 179, 8, 0.2) 0%, 
+    rgba(234, 179, 8, 0.1) 100%);
+  border: 2px solid rgba(234, 179, 8, 0.3);
+}
+
+.inaccurate-option:hover:not(:disabled) .option-icon.inaccurate {
+  background: linear-gradient(135deg, 
+    rgba(234, 179, 8, 0.3) 0%, 
+    rgba(234, 179, 8, 0.2) 100%);
+  border-color: rgba(234, 179, 8, 0.5);
+  transform: scale(1.1);
+  box-shadow: 0 0 20px rgba(234, 179, 8, 0.3);
+}
+
+.option-icon svg {
+  width: 28px;
+  height: 28px;
+  transition: all 0.3s ease;
+}
+
+.option-icon.accurate svg {
+  color: #22c55e;
+}
+
+.option-icon.inaccurate svg {
+  color: #eab308;
+}
+
+.feedback-option:hover:not(:disabled) .option-icon svg {
+  filter: drop-shadow(0 0 8px currentColor);
+  transform: scale(1.1);
+}
+
+.option-content {
+  text-align: center;
+}
+
+.option-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+  transition: all 0.3s ease;
+}
+
+.accurate-option:hover:not(:disabled) .option-title {
+  color: #22c55e;
+  text-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+}
+
+.inaccurate-option:hover:not(:disabled) .option-title {
+  color: #eab308;
+  text-shadow: 0 0 8px rgba(234, 179, 8, 0.3);
+}
+
+.option-desc {
+  font-size: 0.85rem;
+  color: #aaa;
+  transition: all 0.3s ease;
+}
+
+.feedback-option:hover:not(:disabled) .option-desc {
+  color: #ccc;
+}
+
+.feedback-footer {
+  padding: 0 24px 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.modal-btn.small {
+  padding: 10px 32px;
+  font-size: 0.9rem;
+}
+
+/* 提交中遮罩 */
+.submitting-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.submitting-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.submitting-text {
+  color: var(--primary-color);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.spinner.large {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+}
+
+/* 淡入淡出动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+  .action-buttons {
+    left: 2px;
+  }
+  
+  .action-btn {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .action-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .delete-confirm-modal,
+  .feedback-modal {
+    max-width: 90vw;
+  }
+  
+  .modal-header {
+    padding: 24px 20px 16px;
+  }
+  
+  .modal-icon {
+    width: 56px;
+    height: 56px;
+  }
+  
+  .modal-icon svg {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .modal-title {
+    font-size: 1.2rem;
+  }
+  
+  .modal-content {
+    padding: 20px;
+  }
+  
+  .modal-actions {
+    padding: 16px 20px;
+  }
+  
+  .feedback-actions {
+    flex-direction: column;
+    padding: 0 20px 20px;
+  }
+  
+  .feedback-option {
+    width: 100%;
+    flex-direction: row;
+    padding: 16px;
+    gap: 16px;
+  }
+  
+  .option-icon {
+    width: 48px;
+    height: 48px;
+  }
+  
+  .option-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .option-content {
+    text-align: left;
+    flex: 1;
+  }
+  
+  .feedback-footer {
+    padding: 0 20px 20px;
+  }
 }
 </style> 

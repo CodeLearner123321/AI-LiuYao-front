@@ -80,15 +80,71 @@ const goToHexagram = () => {
 
 @media (max-width: 768px) {
   .hero-section {
-    padding: 80px 0;
+    padding: 60px 20px;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .hero-container {
+    padding: 0 15px;
+    width: 100%;
+    max-width: 100%;
   }
   
   .hero-title {
     font-size: 2.5rem;
+    margin-bottom: 15px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
   
   .hero-subtitle {
     font-size: 1rem;
+    margin-bottom: 30px;
+    padding: 0 10px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .hero-btn {
+    font-size: 1rem;
+    padding: 10px 25px;
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-section {
+    padding: 50px 15px;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .hero-container {
+    padding: 0 10px;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .hero-title {
+    font-size: 2rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .hero-subtitle {
+    font-size: 0.9rem;
+    padding: 0 5px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .hero-btn {
+    font-size: 0.9rem;
+    padding: 8px 20px;
+    min-height: 44px;
+    min-width: 44px;
   }
 }
 </style> 

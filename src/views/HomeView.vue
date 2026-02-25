@@ -35,6 +35,8 @@ import FeatureCards from '../components/FeatureCards.vue'
 .home-view {
   width: 100%;
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -89,6 +91,18 @@ import FeatureCards from '../components/FeatureCards.vue'
 }
 
 @media (max-width: 768px) {
+  .home-view {
+    min-height: 100vh;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .footer-content {
+    padding: 0 15px;
+    width: 100%;
+    max-width: 100%;
+  }
+  
   .beian-info {
     font-size: 0.8rem;
     display: flex;
@@ -98,6 +112,37 @@ import FeatureCards from '../components/FeatureCards.vue'
   
   .beian-separator {
     display: none;
+  }
+  
+  .copyright {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-view {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .footer-content {
+    padding: 0 10px;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .beian-info {
+    font-size: 0.75rem;
+    gap: 6px;
+  }
+  
+  .copyright {
+    font-size: 0.75rem;
+  }
+  
+  .beian-icon {
+    width: 12px;
+    height: 12px;
   }
 }
 </style> 

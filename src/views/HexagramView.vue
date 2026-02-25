@@ -1,6 +1,7 @@
 ﻿<script setup>
 import { ref, reactive, computed, watch, onMounted, nextTick, onUnmounted } from 'vue';
 import NavBar from '@/components/NavBar.vue';
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue';
 import { formatDate } from '@/utils/dateUtils';
 import api, { logout } from '@/services/api';
 import { useRouter } from 'vue-router';
@@ -98,6 +99,24 @@ const monthColumnRef = ref(null);
 const dayColumnRef = ref(null);
 const hourColumnRef = ref(null);
 const minuteColumnRef = ref(null);
+
+// 响应式检测是否为手机端
+const isMobile = ref(false);
+
+// 检测屏幕尺寸变化
+const checkScreenSize = () => {
+  isMobile.value = window.innerWidth <= 768;
+};
+
+// 监听窗口大小变化
+onMounted(() => {
+  checkScreenSize();
+  window.addEventListener('resize', checkScreenSize);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkScreenSize);
+});
 
 // 在响应式变量定义部分添加一个新的状态变量
 const isDataChanged = ref(true); // 默认为true，表示第一次加载
@@ -204,17 +223,30 @@ const scrollToCenter = (refName, options, selectedValue) => {
     const wrapEl = scrollbar.wrapRef;
     if (!wrapEl) return;
     
+    // 根据屏幕尺寸动态计算选项高度和padding
+    const isMobileView = window.innerWidth <= 768;
+    const isSmallMobile = window.innerWidth <= 480;
+    
+    let optionHeight, topPadding;
+    if (isSmallMobile) {
+      optionHeight = 28;
+      topPadding = 31;
+    } else if (isMobileView) {
+      optionHeight = 32;
+      topPadding = 34;
+    } else {
+      optionHeight = 36;
+      topPadding = 42;
+    }
+    
+    const wrapHeight = wrapEl.clientHeight;
+    
     // 找到选中项的索引
     const selectedIndex = options.findIndex(option => option.value === selectedValue);
     if (selectedIndex === -1) return;
     
-    // 计算需要滚动的位置
-    const optionHeight = 36; // 选项高度
-    const wrapHeight = wrapEl.clientHeight;
-    
     // 计算理想滚动位置：选项在中间
-    // 42是顶部padding，需要考虑这个偏移量
-    const idealScrollTop = (selectedIndex * optionHeight) - ((wrapHeight - optionHeight) / 2) + 42;
+    const idealScrollTop = (selectedIndex * optionHeight) - ((wrapHeight - optionHeight) / 2) + topPadding;
     
     // 设置滚动位置，确保选中项正好在中间位置
     wrapEl.scrollTop = Math.max(0, idealScrollTop);
@@ -223,7 +255,7 @@ const scrollToCenter = (refName, options, selectedValue) => {
     const totalContentHeight = options.length * optionHeight;
     
     // 确保不能滚动太远，防止出现大片空白
-    const maxScrollTop = Math.max(0, totalContentHeight - wrapHeight + 84); // 84 = padding(42) * 2
+    const maxScrollTop = Math.max(0, totalContentHeight - wrapHeight + (topPadding * 2));
     
     // 限制滚动范围
     if (wrapEl.scrollTop > maxScrollTop) {
@@ -322,24 +354,41 @@ const resetAnimations = () => {
 
 // 调用后端API获取八字
 const fetchBaziFromAPI = async () => {
+  console.log('>>> fetchBaziFromAPI 开始执行');
+  console.log('>>> divineTime.value:', divineTime.value);
+  
   if (!divineTime.value) {
     // 如果没有选择时间，提示用户
+    console.log('>>> 没有选择时间，退出');
     alert('请先选择占卜时间');
     return;
   }
   
+  console.log('>>> 设置 isLoading = true');
   isLoading.value = true;
   
   try {
     // 格式化日期为ISO格式：YYYY-MM-DDTHH:mm:ss
     const isoDateTime = formatDate(divineTime.value, 'YYYY-MM-DDTHH:mm:ss');
+    console.log('>>> 格式化后的时间:', isoDateTime);
+    console.log('>>> 准备调用 API: /api/liuyao/calculate');
     
-    // 调用后端API
-    const response = await api.get('/api/liuyao/calculate', {
-      params: {
-        dateTime: isoDateTime
-      }
+    // 创建一个超时 Promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('API 请求超时')), 10000); // 10秒超时
     });
+    
+    // 调用后端API，使用 Promise.race 实现超时控制
+    const response = await Promise.race([
+      api.get('/api/liuyao/calculate', {
+        params: {
+          dateTime: isoDateTime
+        }
+      }),
+      timeoutPromise
+    ]);
+    
+    console.log('>>> API 调用完成，收到响应:', response.data);
     
     // 处理API返回的数据
     if (response.data.data) {
@@ -424,6 +473,7 @@ const fetchBaziFromAPI = async () => {
     }
   } finally {
     isLoading.value = false;
+    console.log('fetchBaziFromAPI 完成，isLoading 已重置为:', isLoading.value);
   }
 };
 
@@ -431,7 +481,8 @@ const fetchBaziFromAPI = async () => {
 const hexagramTypes = [
   { label: '手动指定爻象', value: 'appoint', icon: '🔣' },
   { label: '系统随机起卦', value: 'random', icon: '🎲' },
-  { label: '系统时间起卦', value: 'timeRandom', icon: '⏱️' }
+  { label: '系统时间起卦', value: 'timeRandom', icon: '⏱️' },
+  { label: '图像识别起卦', value: 'imageRecognition', icon: '🖼️' }
 ];
 
 // 干支选项
@@ -478,10 +529,16 @@ const showHexagramComponent = computed(() => {
   return selectedHexagramType.value === 'appoint' || selectedHexagramType.value === 'random';
 });
 
+// 检查是否显示图像识别组件
+const showImageRecognitionComponent = computed(() => {
+  return selectedHexagramType.value === 'imageRecognition';
+});
+
 // 获取按钮文本
 const getButtonText = computed(() => {
   if (isShaking.value) return '摇卦中...';
   if (selectedHexagramType.value === 'random' && !buttonDisabled.value) return '开始摇卦';
+  if (selectedHexagramType.value === 'imageRecognition') return '识别图像';
   return '生成卦象';
 });
 
@@ -494,12 +551,17 @@ const getRandomYaoValue = () => {
 
 // 提交表单按钮点击事件处理
 const submitForm = async () => {
-    // 确保已经输入了问题描述
-    if (!questionDescription.value) {
-    alert('请详细描述问题');
+  // 图像识别起卦需要检查是否上传了文件
+  if (selectedHexagramType.value === 'imageRecognition' && !uploadedFile.value) {
+    alert('请先上传图片文件');
     return;
   }
   
+  // 非图像识别起卦需要检查是否输入了问题描述
+  if (selectedHexagramType.value !== 'imageRecognition' && !questionDescription.value) {
+    alert('请详细描述问题');
+    return;
+  }
   
   // 如果正在摇卦中，不执行任何操作
   if (isShaking.value) {
@@ -511,6 +573,9 @@ const submitForm = async () => {
     isShaking.value = true;
     currentShakingYao.value = 1;
     await shakeNextYao(1);
+  } else if (selectedHexagramType.value === 'imageRecognition') {
+    // 图像识别起卦
+    await generateHexagramFromImage();
   } else {
     // 其他类型，直接生成卦象
     await generateHexagramLocal();
@@ -657,6 +722,171 @@ const convertYaoValuesToNumber = () => {
   );
 };
 
+// 图像识别起卦方法
+const generateHexagramFromImage = async () => {
+  if (!uploadedFile.value) {
+    alert('请先上传图片文件');
+    return;
+  }
+  
+  isImageProcessing.value = true;
+  
+  try {
+    // 创建FormData对象
+    const formData = new FormData();
+    formData.append('file', uploadedFile.value);
+    
+    // 调用图像识别接口
+    const response = await api.post('/api/liuyao/recognize', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    // 处理API返回的数据
+    if (response.data.code === 200 && response.data.data) {
+      // 处理新的数据结构：data.hexagram 和 data.price
+      const responseData = response.data.data;
+      
+      // 如果返回的是新结构（包含 hexagram 和 price）
+      if (responseData.hexagram) {
+        hexagramResult.value = responseData.hexagram;
+        recognizedPrice.value = responseData.price;
+        console.log("图像识别卦象结果:", hexagramResult.value);
+        console.log("图像识别价格:", recognizedPrice.value);
+        
+        // 从图像识别结果中获取问题描述和背景信息
+        if (responseData.hexagram.questionDescription) {
+          questionDescription.value = responseData.hexagram.questionDescription;
+        }
+        if (responseData.hexagram.questionBackground) {
+          questionBackground.value = responseData.hexagram.questionBackground;
+        }
+        // 存储图像识别返回的number数据，用于后续的cast请求
+        if (responseData.hexagram.number) {
+          imageRecognitionNumber.value = responseData.hexagram.number;
+          console.log("图像识别返回的number:", imageRecognitionNumber.value);
+        }
+      } else {
+        // 兼容旧的数据结构（直接返回 hexagram 数据）
+        hexagramResult.value = responseData;
+        console.log("图像识别卦象结果:", hexagramResult.value);
+        
+        // 从图像识别结果中获取问题描述和背景信息
+        if (responseData.questionDescription) {
+          questionDescription.value = responseData.questionDescription;
+        }
+        if (responseData.questionBackground) {
+          questionBackground.value = responseData.questionBackground;
+        }
+        // 存储图像识别返回的number数据，用于后续的cast请求
+        if (responseData.number) {
+          imageRecognitionNumber.value = responseData.number;
+          console.log("图像识别返回的number:", imageRecognitionNumber.value);
+        }
+      }
+      
+      showResult.value = true;
+      
+      // 滚动到结果区域并重新应用行动画
+      nextTick(() => {
+        const resultElement = document.getElementById('hexagram-result');
+        if (resultElement) {
+          resultElement.scrollIntoView({ behavior: 'smooth' });
+          
+          // 重新应用行动画
+          const rows = document.querySelectorAll('.animate-row');
+          rows.forEach(row => {
+            row.style.animation = 'none';
+            row.offsetHeight; // 触发重排
+            row.style.animation = '';
+          });
+        }
+      });
+    } else {
+      throw new Error(response.data.msg || '图像识别失败');
+    }
+  } catch (error) {
+    console.error('图像识别失败', error);
+    if (error.response) {
+      if (error.response.status === 401) {
+        // 使用logout函数进行登出处理
+        logout();
+      } else if (error.response.data) {
+        alert(`图像识别失败: ${response.data.msg || '服务器错误'}`);
+      } else {
+        alert('图像识别失败，请稍后重试');
+      }
+    } else {
+      alert(error.message || '图像识别失败，请稍后重试');
+    }
+  } finally {
+    isImageProcessing.value = false;
+  }
+};
+
+// 文件上传相关方法
+const handleFileSelect = (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    processSelectedFile(file);
+  }
+};
+
+const handleDrop = (event) => {
+  event.preventDefault();
+  isDragOver.value = false;
+  
+  const files = event.dataTransfer.files;
+  if (files.length > 0) {
+    processSelectedFile(files[0]);
+  }
+};
+
+const handleDragOver = (event) => {
+  event.preventDefault();
+  isDragOver.value = true;
+};
+
+const handleDragLeave = (event) => {
+  event.preventDefault();
+  isDragOver.value = false;
+};
+
+const processSelectedFile = (file) => {
+  // 检查文件类型
+  if (!file.type.startsWith('image/')) {
+    alert('请选择图片文件');
+    return;
+  }
+  
+  // 检查文件大小（限制为10MB）
+  if (file.size > 10 * 1024 * 1024) {
+    alert('图片文件大小不能超过10MB');
+    return;
+  }
+  
+  uploadedFile.value = file;
+  
+  // 创建图片预览
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    imagePreview.value = e.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+const removeFile = () => {
+  uploadedFile.value = null;
+  imagePreview.value = null;
+  if (fileInput.value) {
+    fileInput.value.value = '';
+  }
+};
+
+// 文件输入引用
+const fileInput = ref(null);
+
 // 打开对应爻的下拉选择器
 const toggleYaoSelect = (index) => {
   const selectRefs = {
@@ -675,14 +905,41 @@ const toggleYaoSelect = (index) => {
 
 // 在组件挂载时自动获取八字信息
 onMounted(() => {
+  // 调试输出：检查挂载前的状态
+  console.log('=== 页面挂载前状态检查 ===');
+  console.log('isLoading:', isLoading.value);
+  console.log('isShaking:', isShaking.value);
+  console.log('isImageProcessing:', isImageProcessing.value);
+  console.log('buttonDisabled:', buttonDisabled.value);
+  
+  // 重置加载状态，确保按钮可用
+  isLoading.value = false;
+  isShaking.value = false;
+  isImageProcessing.value = false;
+  buttonDisabled.value = false;
+  
+  console.log('=== 状态重置后 ===');
+  console.log('isLoading:', isLoading.value);
+  console.log('isShaking:', isShaking.value);
+  console.log('isImageProcessing:', isImageProcessing.value);
+  console.log('buttonDisabled:', buttonDisabled.value);
+  console.log('getButtonText:', getButtonText.value);
+  
   // 设置首次加载标志
   pillarChanges.year = true;
   pillarChanges.month = true;
   pillarChanges.day = true;
   pillarChanges.hour = true;
   
-  // 初始化时直接调用后端API获取八字
-  fetchBaziFromAPI();
+  // 【关键修复】使用 setTimeout 异步调用，不阻塞页面初始化
+  // 这样即使 API 调用失败或超时，也不会影响按钮的可用性
+  setTimeout(() => {
+    fetchBaziFromAPI().catch(err => {
+      console.error('初始化获取八字信息失败:', err);
+      // 确保即使出错也重置 isLoading
+      isLoading.value = false;
+    });
+  }, 100);
   
   // 添加动画结束后的处理
   document.addEventListener('animationend', (event) => {
@@ -696,6 +953,27 @@ onMounted(() => {
       }
     }
   });
+});
+
+// 在组件卸载时清理所有计时器
+onUnmounted(() => {
+  console.log('组件卸载，清理所有计时器...');
+  
+  // 清理轮询定时器
+  if (pollingTimeout) {
+    clearTimeout(pollingTimeout);
+    pollingTimeout = null;
+  }
+  
+  // 清理加载计时器（如果存在）
+  if (window.loadingTimers) {
+    try {
+      if (window.loadingTimers.mainTimer) clearInterval(window.loadingTimers.mainTimer);
+      if (window.loadingTimers.insightTimer) clearInterval(window.loadingTimers.insightTimer);
+    } catch (e) {
+      console.error('清理加载计时器时出错:', e);
+    }
+  }
 });
 
 // 处理年份点击
@@ -735,6 +1013,16 @@ const analysisResult = ref(''); // 存储AI分析结果
 const keyOutcome = ref(''); // 存储判辞数据
 const showAnalysis = ref(false); // 控制分析结果的显示
 const isLoadingPrediction = ref(false); // 控制预测加载状态
+const predictionPrice = ref(null); // 存储预测支付金额
+const predictionPaymentType = ref(null); // 存储预测支付类型
+
+// 图像识别相关变量
+const uploadedFile = ref(null);
+const isDragOver = ref(false);
+const imagePreview = ref(null);
+const isImageProcessing = ref(false);
+const imageRecognitionNumber = ref(null); // 存储图像识别返回的number数据
+const recognizedPrice = ref(null); // 存储图像识别的价格
 const loadingProgress = ref(0); // 加载进度（0-100）
 const loadingPhase = ref(0); // 加载阶段（0-5）
 const loadingMessages = [
@@ -864,6 +1152,7 @@ const createEnergyRipple = () => {
 // 开启预测方法
 // 说明：该方法使用新版API接口，先获取taskId，然后轮询任务状态，直到得到最终结果
 const startPrediction = async () => {
+  console.log('开启预测按钮被点击');
   try {
     // 清除可能存在的上一次轮询任务
     if (pollingTimeout) {
@@ -871,9 +1160,15 @@ const startPrediction = async () => {
       pollingTimeout = null;
     }
     
-    // 确保已经输入了问题描述
-    if (!questionDescription.value) {
+    // 非图像识别起卦需要检查是否输入了问题描述
+    if (selectedHexagramType.value !== 'imageRecognition' && !questionDescription.value) {
       alert('请详细描述您的问题');
+      return;
+    }
+    
+    // 图像识别起卦需要检查是否已经完成图像识别并获取到问题描述
+    if (selectedHexagramType.value === 'imageRecognition' && !questionDescription.value) {
+      alert('请先完成图像识别，获取问题描述后再进行预测');
       return;
     }
     
@@ -890,16 +1185,63 @@ const startPrediction = async () => {
     // 构建请求参数
     const requestData = {
       castType: selectedHexagramType.value === 'timeRandom' ? 'TIME' : 
-                selectedHexagramType.value === 'random' ? 'RANDOM' : 'MANUAL',
+                selectedHexagramType.value === 'random' ? 'RANDOM' : 
+                selectedHexagramType.value === 'imageRecognition' ? 'IMAGE' : 'MANUAL',
       castTime: formatDate(divineTime.value, 'YYYY-MM-DD HH:mm:ss'),
       question: questionDescription.value,
-      background: questionBackground.value || '无'
+      background: questionBackground.value || '无',
+      customTime: (hexagramResult.value.baZi?.year ?  hexagramResult.value.baZi.year + "年" : "" ) 
+      + (hexagramResult.value.baZi?.month ? hexagramResult.value.baZi.month + "月" : "" ) 
+      + (hexagramResult.value.baZi?.day ? hexagramResult.value.baZi.day + "日" : "" ) 
+      + (hexagramResult.value.baZi?.hour ? hexagramResult.value.baZi.hour + "时" : "" )
     };
+    
+    // 从 localStorage 读取用户设置的 API Key 信息
+    const savedLlmServiceType = localStorage.getItem('llmServiceType');
+    const savedModelId = localStorage.getItem('modelId');
+    const savedApiKey = localStorage.getItem('apiKey');
+    
+    // 如果用户设置了 API Key 相关信息，则添加到请求中
+    if (savedLlmServiceType) {
+      requestData.llmServiceType = savedLlmServiceType; // 直接使用，不转换大小写（后端枚举值是小写）
+    }
+    if (savedModelId) {
+      requestData.modelId = savedModelId;
+    }
+    if (savedApiKey) {
+      requestData.apiKey = savedApiKey;
+    }
+    
+    console.log('API Key配置:', {
+      llmServiceType: requestData.llmServiceType,
+      modelId: requestData.modelId,
+      hasApiKey: !!requestData.apiKey
+    });
+    
+    // 确保必要参数存在
+    if (!requestData.question && requestData.castType !== 'IMAGE') {
+      alert('请详细描述您的问题');
+      return;
+    }
+    
+    // 对于图像识别起卦，如果还没有问题描述，提示用户等待图像识别完成
+    if (requestData.castType === 'IMAGE' && !requestData.question) {
+      alert('请先完成图像识别，获取问题描述后再进行预测');
+      return;
+    }
     
     // 根据不同的卦象类型设置不同的请求参数
     if (requestData.castType === 'TIME') {
       // 使用与生成卦象时相同的时间戳
       requestData.timestamp = usedTimestamp.value || divineTime.value.getTime();
+    } else if (selectedHexagramType.value === 'imageRecognition') {
+      // 图像识别起卦，使用图像识别返回的number参数
+      if (imageRecognitionNumber.value) {
+        requestData.number = imageRecognitionNumber.value;
+        console.log("使用图像识别的number:", imageRecognitionNumber.value);
+      } else {
+        console.warn("图像识别起卦但未找到number数据");
+      }
     } else {
       requestData.number = convertYaoValuesToNumber();
     }
@@ -907,11 +1249,29 @@ const startPrediction = async () => {
     console.log('发送预测请求:', requestData);
     
     // 发送请求到后端，获取任务ID
-    const response = await api.post('/api/liuyao/cast', requestData);
+    console.log('正在发送预测请求到:', '/api/liuyao/cast');
+    console.log('请求数据:', requestData);
     
-    if (response.data.code === 200 && response.data.data && response.data.data.taskId) {
-      const taskId = response.data.data.taskId;
-      console.log('获取到任务ID:', taskId);
+    let response;
+    try {
+      response = await api.post('/api/liuyao/cast', requestData);
+      console.log('API响应:', response);
+    } catch (apiError) {
+      console.error('API调用失败:', apiError);
+      throw apiError; // 重新抛出错误，让外层catch处理
+    }
+    
+    // 检查响应状态
+    if (!response.data || response.data.code !== 200) {
+      throw new Error(response.data?.msg || '创建预测任务失败');
+    }
+    
+    if (!response.data.data || !response.data.data.taskId) {
+      throw new Error('服务器返回数据格式错误，缺少任务ID');
+    }
+    
+    const taskId = response.data.data.taskId;
+    console.log('获取到任务ID:', taskId);
       
       // 开始轮询任务状态
       let pollingCount = 0;
@@ -963,6 +1323,15 @@ const startPrediction = async () => {
                   
                   // 存储判辞数据
                   keyOutcome.value = taskData.data.keyOutcome || '';
+                  
+                  // 存储支付信息 - 检查多个可能的位置
+                  if (taskData.price !== undefined) {
+                    predictionPrice.value = taskData.price;
+                    predictionPaymentType.value = taskData.paymentType;
+                  } else if (taskData.data.price !== undefined) {
+                    predictionPrice.value = taskData.data.price;
+                    predictionPaymentType.value = taskData.data.paymentType;
+                  }
                   
                   // 确保能量值达到100%
                   interactiveYao.energy = 100;
@@ -1022,11 +1391,15 @@ const startPrediction = async () => {
               if (pollingCount < maxPollingAttempts) {
                 pollingTimeout = setTimeout(pollTaskStatus, 5000); // 5秒后再次查询
               } else {
-                // 超过最大轮询次数，提示用户
-                clearInterval(timers.mainTimer);
-                clearInterval(timers.insightTimer);
-                isLoadingPrediction.value = false;
-                alert('预测任务处理时间过长，请稍后在"历史记录"中查看结果');
+                            // 超过最大轮询次数，提示用户
+            try {
+              if (timers && timers.mainTimer) clearInterval(timers.mainTimer);
+              if (timers && timers.insightTimer) clearInterval(timers.insightTimer);
+            } catch (e) {
+              console.error('清理计时器时出错:', e);
+            }
+            isLoadingPrediction.value = false;
+            alert('预测任务处理时间过长，请稍后在"历史记录"中查看结果');
               }
             }
           } else {
@@ -1035,81 +1408,99 @@ const startPrediction = async () => {
         } catch (pollError) {
           console.error('轮询任务状态失败:', pollError);
           
+          // 检查是否是致命错误（如401认证失败）
+          if (pollError.response && pollError.response.status === 401) {
+            // 认证失败，停止轮询并登出
+            try {
+              if (timers && timers.mainTimer) clearInterval(timers.mainTimer);
+              if (timers && timers.insightTimer) clearInterval(timers.insightTimer);
+            } catch (e) {
+              console.error('清理计时器时出错:', e);
+            }
+            isLoadingPrediction.value = false;
+            logout();
+            return;
+          }
+          
           // 如果网络错误等原因导致轮询失败，但未超过最大次数，继续尝试
           if (pollingCount < maxPollingAttempts) {
             pollingTimeout = setTimeout(pollTaskStatus, 5000);
           } else {
             // 超过最大轮询次数，停止轮询
-            clearInterval(timers.mainTimer);
-            clearInterval(timers.insightTimer);
+            try {
+              if (timers && timers.mainTimer) clearInterval(timers.mainTimer);
+              if (timers && timers.insightTimer) clearInterval(timers.insightTimer);
+            } catch (e) {
+              console.error('清理计时器时出错:', e);
+            }
             isLoadingPrediction.value = false;
-            alert('网络连接不稳定，无法获取预测结果，请稍后重试');
+            
+            // 根据错误类型显示不同的提示
+            if (pollError.response && pollError.response.status === 405) {
+              alert('接口方法不允许，请检查请求方式或联系管理员');
+            } else {
+              alert('网络连接不稳定，无法获取预测结果，请稍后重试');
+            }
           }
         }
       };
       
-      // 声明轮询定时器变量
-      let pollingTimeout;
-      
       // 立即开始第一次轮询
       pollTaskStatus();
-      
-    } else {
-      // 清除加载计时器
-      clearInterval(timers.mainTimer);
-      clearInterval(timers.insightTimer);
-      
-      // 关闭加载界面
-      isLoadingPrediction.value = false;
-      
-      console.error('创建预测任务失败:', response.data);
-      alert(`创建预测任务失败: ${response.data.msg || '未知错误'}`);
-    }
     
   } catch (error) {
-    // 清除加载计时器
-    clearInterval(timers.mainTimer);
-    clearInterval(timers.insightTimer);
+    console.error('预测失败，开始清理资源...', error);
+    
+    // 清除加载计时器 - 添加安全检查
+    try {
+      if (timers && timers.mainTimer) {
+        clearInterval(timers.mainTimer);
+        console.log('已清除主计时器');
+      }
+      if (timers && timers.insightTimer) {
+        clearInterval(timers.insightTimer);
+        console.log('已清除洞察计时器');
+      }
+    } catch (timerError) {
+      console.error('清理计时器时出错:', timerError);
+    }
     
     // 关闭加载界面
     isLoadingPrediction.value = false;
+    console.log('已关闭加载界面');
     
-    console.error('预测失败', error);
+    // 显示错误信息
     if (error.response) {
       if (error.response.status === 401) {
         // 使用logout函数进行登出处理
         logout();
-      } else if (error.response.data) {
-        alert(`预测失败: ${error.response.data.msg || '服务器错误'}`);
+      } else if (error.response.status === 405) {
+        alert('接口方法不允许，请检查请求方式或联系管理员');
+      } else if (error.response.data && error.response.data.msg) {
+        alert(`预测失败: ${error.response.data.msg}`);
+      } else if (error.response.status) {
+        alert(`预测失败: HTTP ${error.response.status} - ${error.response.statusText || '服务器错误'}`);
       } else {
         alert('预测失败，请稍后重试');
       }
+    } else if (error.message) {
+      alert(`预测失败: ${error.message}`);
     } else {
       alert('网络连接错误，请检查网络后重试');
     }
   }
 };
 
-// 修改格式化分析文本的方法，支持Markdown
-const formatAnalysisText = (text) => {
-  if (!text) return '';
-  
-  // 不再使用marked解析Markdown文本
-  // 保留原始的\n换行符
-  let formattedText = text;
-  
-  // 处理标题格式如：【标题】
-  formattedText = formattedText.replace(/【([^】]+)】/g, '<div class="paragraph-title">$1</div>');
-  
-  // 处理关键词强调
-  formattedText = formattedText.replace(/\*\*([^*]+)\*\*/g, '<span class="highlight-text">$1</span>');
-  
-  return formattedText;
-};
+// Markdown 解析现在由 MarkdownRenderer 组件处理
 
 // 起卦类型选择方法
 const selectHexagramType = (typeValue) => {
   selectedHexagramType.value = typeValue;
+  
+  // 如果切换到非图像识别类型，清空图像识别的number数据
+  if (typeValue !== 'imageRecognition') {
+    imageRecognitionNumber.value = null;
+  }
 };
 
 // 声明一个全局变量用于存储轮询定时器
@@ -1244,7 +1635,7 @@ const formatDateString = (date, format) => {
           <el-dialog
             v-model="timePickerVisible"
             title="选择占卜时间"
-            width="50%"
+            :width="isMobile ? '95%' : '50%'"
             class="time-picker-dialog"
             :close-on-click-modal="false"
             center
@@ -1623,12 +2014,60 @@ const formatDateString = (date, format) => {
           </div>
         </div>
         
+        <!-- 图像识别组件，只在选择了图像识别起卦类型时显示 -->
+        <div class="form-group" v-if="showImageRecognitionComponent">
+          <label class="form-label">上传图片</label>
+          <div class="image-upload-container">
+            <!-- 文件上传区域 -->
+            <div 
+              class="upload-area"
+              :class="{ 'drag-over': isDragOver, 'has-file': uploadedFile }"
+              @drop="handleDrop"
+              @dragover="handleDragOver"
+              @dragleave="handleDragLeave"
+              @click="fileInput?.click()"
+            >
+              <input
+                ref="fileInput"
+                type="file"
+                accept="image/*"
+                @change="handleFileSelect"
+                style="display: none;"
+              />
+              
+              <!-- 上传提示 -->
+              <div v-if="!uploadedFile" class="upload-prompt">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">
+                  <p>点击选择图片或拖拽图片到此处</p>
+                  <p class="upload-hint">支持 JPG、PNG、GIF 格式，文件大小不超过 10MB</p>
+                </div>
+              </div>
+              
+              <!-- 图片预览 -->
+              <div v-if="uploadedFile && imagePreview" class="image-preview-container">
+                <img :src="imagePreview" alt="预览图片" class="image-preview" />
+                <div class="image-info">
+                  <p class="file-name">{{ uploadedFile.name }}</p>
+                  <p class="file-size">{{ (uploadedFile.size / 1024 / 1024).toFixed(2) }} MB</p>
+                </div>
+                <button class="remove-file-btn" @click.stop="removeFile">×</button>
+              </div>
+            </div>
+            
+            <!-- 上传说明 -->
+            <div class="upload-description">
+              <p>请上传包含六爻卦象的图片，系统将自动识别并生成卦象结果</p>
+            </div>
+          </div>
+        </div>
+        
         <div class="form-actions">
           <el-button 
             type="primary" 
             class="submit-button" 
             @click="submitForm" 
-            :loading="isLoading" 
+            :loading="isLoading || isImageProcessing" 
             :class="{ 'shaking-button': isShaking }"
           >
             {{ getButtonText }}
@@ -1640,33 +2079,46 @@ const formatDateString = (date, format) => {
     <!-- 卦象结果展示区域 -->
     <transition name="result-appear">
       <div v-if="showResult && hexagramResult" id="hexagram-result" class="hexagram-result">
-        <h2 class="result-title">卦象结果</h2>
+        <div class="result-title-wrapper">
+          <h2 class="result-title">卦象结果</h2>
+          <span v-if="recognizedPrice" class="recognized-price-badge">识别消费：{{ recognizedPrice }}点</span>
+        </div>
         
-        <div class="result-time">
-          <span>时间: {{ hexagramResult.localDateTime ? formatDateString(new Date(hexagramResult.localDateTime), 'YYYY-MM-DD HH:mm') : '' }} 
-          {{ new Date(hexagramResult.localDateTime).toLocaleDateString('zh-CN', { weekday: 'long' }) }}</span>
+        <div class="result-time" v-if="hexagramResult.localDateTime || hexagramResult.customTime">
+          <span>时间: 
+            <template v-if="hexagramResult.localDateTime">
+              {{ formatDateString(new Date(hexagramResult.localDateTime), 'YYYY-MM-DD HH:mm') }} 
+              {{ new Date(hexagramResult.localDateTime).toLocaleDateString('zh-CN', { weekday: 'long' }) }}
+            </template>
+            <template v-else-if="hexagramResult.customTime">
+              {{ hexagramResult.customTime }}
+            </template>
+          </span>
         </div>
 
-        <div class="ganzhi-info">
-          <span>问题: {{ questionDescription }}</span>
+        <div class="ganzhi-info" v-if="hexagramResult.questionDescription">
+          <span>问题: {{ hexagramResult.questionDescription }}</span>
         </div>
 
-        <div class="ganzhi-info">
-          <span>背景: {{ questionBackground }}</span>
+        <div class="ganzhi-info" v-if="hexagramResult.questionBackground">
+          <span>背景: {{ hexagramResult.questionBackground }}</span>
         </div>
 
-        <div class="ganzhi-info">
+        <div class="ganzhi-info" v-if="selectedHexagramType">
           <span>起卦类型: {{ hexagramTypes.find(type => type.value === selectedHexagramType)?.label || selectedHexagramType }}</span>
         </div>
         
-        <div class="ganzhi-info">
-          <span>干支: {{ chineseCalendar?.year }} 
-            <span class="highlight-text">{{ chineseCalendar?.month }}</span> 
-            <span class="highlight-text">{{ chineseCalendar?.day }}</span> {{ chineseCalendar?.hour }} 
-            (<span class="highlight-text">{{ chineseCalendar?.dayToNull }}</span> {{ chineseCalendar?.nayin }}旬)</span>
+        <div class="ganzhi-info" v-if="hexagramResult.baZi && (hexagramResult.baZi.year || hexagramResult.baZi.month || hexagramResult.baZi.day || hexagramResult.baZi.hour)">
+          <span>干支: 
+            <span v-if="hexagramResult.baZi.year" class="highlight-text">{{ hexagramResult.baZi.year }}年</span>
+            <span v-if="hexagramResult.baZi.month" class="highlight-text" style="margin-left: 8px;">{{ hexagramResult.baZi.month }}月</span>
+            <span v-if="hexagramResult.baZi.day" class="highlight-text" style="margin-left: 8px;">{{ hexagramResult.baZi.day }}日</span>
+            <span v-if="hexagramResult.baZi.hour" class="highlight-text" style="margin-left: 8px;">{{ hexagramResult.baZi.hour }}时</span>
+            <span v-if="hexagramResult.baZi.dayToNull" style="margin-left: 8px;">(<span class="highlight-text">{{ hexagramResult.baZi.dayToNull }}</span> {{ chineseCalendar?.nayin }}旬)</span>
+          </span>
         </div>
         
-        <div class="shensha-info">
+        <div class="shensha-info" v-if="hexagramResult.shenSha && hexagramResult.shenSha.length > 0">
           <span>神煞: 
             <span v-for="(sha, index) in hexagramResult.shenSha" :key="index" class="shensha-item">
               {{ sha }}{{ index < hexagramResult.shenSha.length - 1 ? ' ' : '' }}
@@ -1985,7 +2437,27 @@ const formatDateString = (date, format) => {
               </div>
               
               <!-- 解析文本 -->
-              <div class="analysis-text silk-content" v-html="formatAnalysisText(analysisResult)"></div>
+              <MarkdownRenderer 
+                :content="analysisResult"
+                class="analysis-text silk-content"
+              />
+              
+              <!-- 支付信息 -->
+              <div v-show="predictionPaymentType !== null && predictionPaymentType !== undefined" 
+                   class="payment-info">
+                <span v-if="predictionPaymentType === 0">
+                  免费额度消耗：{{ predictionPrice || 0 }}次
+                </span>
+                <span v-else-if="predictionPaymentType === 1">
+                  本次分析消耗：{{ predictionPrice || 0 }}元
+                </span>
+                <span v-else-if="predictionPaymentType === 2">
+                  自定义API消耗：{{ predictionPrice || 0 }}元
+                </span>
+                <span v-else>
+                  消费信息：{{ predictionPrice || 0 }}元（类型：{{ predictionPaymentType }}）
+                </span>
+              </div>
               
               <!-- 落款与印章 -->
               <div class="signature-area">
@@ -2015,6 +2487,8 @@ const formatDateString = (date, format) => {
 <style scoped>
 .hexagram-view {
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   background-color: var(--dark-bg);
   color: var(--text-light);
 }
@@ -2127,6 +2601,7 @@ const formatDateString = (date, format) => {
   padding: 0;
   background-color: #222;
   position: relative;
+  gap: 0;
 }
 
 .picker-column {
@@ -2295,6 +2770,114 @@ const formatDateString = (date, format) => {
 /* 确保选中项在中间位置 */
 .el-scrollbar {
   position: relative;
+}
+
+/* 手机端响应式优化 - 只在小屏幕时生效 */
+@media (max-width: 768px) {
+  .time-picker-container {
+    padding: 10px !important;
+  }
+  
+  .time-picker-header {
+    padding: 12px 0 !important;
+  }
+  
+  .header-item {
+    font-size: 14px !important;
+    padding: 0 5px !important;
+  }
+  
+  .time-picker-columns {
+    gap: 5px !important;
+  }
+  
+  .picker-column {
+    min-width: 0 !important;
+    flex: 1 !important;
+  }
+  
+  .picker-option {
+    height: 32px !important;
+    line-height: 32px !important;
+    font-size: 14px !important;
+  }
+  
+  .picker-options {
+    min-height: 100px !important;
+  }
+  
+  /* 手机端选择器高亮位置调整 */
+  .picker-selection-highlight {
+    top: 34px !important;
+    height: 32px !important;
+  }
+  
+  .picker-column::before,
+  .picker-column::after {
+    height: 34px !important;
+  }
+  
+  /* 手机端滚动区域调整 */
+  :deep(.limited-scroll .el-scrollbar__view) {
+    padding: 34px 0 !important;
+    min-height: 100px !important;
+  }
+  
+  :deep(.limited-scroll .el-scrollbar__wrap) {
+    max-height: 100px !important;
+  }
+  
+  .dialog-actions {
+    padding: 15px 0 !important;
+    gap: 15px !important;
+  }
+  
+  .action-btn {
+    padding: 10px 25px !important;
+    font-size: 14px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .time-picker-container {
+    padding: 5px !important;
+  }
+  
+  .header-item {
+    font-size: 13px !important;
+    padding: 0 2px !important;
+  }
+  
+  .picker-option {
+    height: 28px !important;
+    line-height: 28px !important;
+    font-size: 13px !important;
+  }
+  
+  .picker-options {
+    min-height: 90px !important;
+  }
+  
+  /* 小手机端选择器高亮位置调整 */
+  .picker-selection-highlight {
+    top: 31px !important;
+    height: 28px !important;
+  }
+  
+  .picker-column::before,
+  .picker-column::after {
+    height: 31px !important;
+  }
+  
+  /* 小手机端滚动区域调整 */
+  :deep(.limited-scroll .el-scrollbar__view) {
+    padding: 31px 0 !important;
+    min-height: 90px !important;
+  }
+  
+  :deep(.limited-scroll .el-scrollbar__wrap) {
+    max-height: 90px !important;
+  }
 }
 
 .current-bazi {
@@ -2815,6 +3398,27 @@ const formatDateString = (date, format) => {
   flex-direction: column !important;
 }
 
+/* 手机端对话框优化 - 只在小屏幕时生效 */
+@media (max-width: 768px) {
+  :deep(.el-dialog) {
+    width: 95% !important;
+    max-height: 90vh !important;
+    margin: 10px auto !important;
+  }
+  
+  :deep(.el-dialog__body) {
+    max-height: calc(90vh - 120px) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  :deep(.el-dialog) {
+    width: 98% !important;
+    max-height: 95vh !important;
+    margin: 5px auto !important;
+  }
+}
+
 :deep(.el-dialog__header) {
   padding: 0 !important;
   margin: 0 !important;
@@ -3192,14 +3796,48 @@ const formatDateString = (date, format) => {
 }
 
 /* 卦象结果标题样式 */
+.result-title-wrapper {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 25px;
+  position: relative;
+}
+
 .result-title {
   font-size: 2rem;
   color: var(--primary-color); /* 系统默认黄色 */
-  margin-bottom: 25px;
+  margin: 0 auto;
   text-align: center;
   text-shadow: 0 0 15px rgba(230, 200, 76, 0.4);
   letter-spacing: 2px;
   position: relative;
+}
+
+/* 识别消费文字 - 动态流光渐变效果 */
+.recognized-price-badge {
+  font-size: 0.85rem;
+  font-weight: 400;
+  padding: 2px 6px;
+  white-space: nowrap;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, 
+    #FFD700 0%, 
+    #1a1a1a 25%, 
+    #FFFFFF 50%, 
+    #1a1a1a 75%, 
+    #FFD700 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: inline-block;
+  animation: gradientFlow 3s linear infinite;
 }
 
 /* 添加高亮动画 */
@@ -3547,19 +4185,12 @@ const formatDateString = (date, format) => {
   border: 1px solid rgba(139, 69, 19, 0.2);
 }
 
+/* Markdown 解析文本容器 - 古朴典雅风格 */
+/* analysis-text 容器样式 - Markdown 内容样式已由 MarkdownRenderer 组件控制 */
 .analysis-text {
-  color: #e2c44b; /* 金黄色文本 */
-  font-size: 1.05rem;
-  white-space: pre-line; /* 保留换行符 */
-  font-family: 'Noto Serif SC', 'SimSun', serif;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); /* 添加文本阴影 */
-  line-height: 1.9;
   position: relative;
   z-index: 1;
   margin: 25px 0;
-  text-align: justify;
-  letter-spacing: 1px;
-  text-indent: 2em; /* 首行缩进 */
 }
 
 /* 分析结果动画 */
@@ -5457,13 +6088,20 @@ const formatDateString = (date, format) => {
 }
 
 
+/* 卦辞内容样式 - 书法古风韵味 */
 .oracle-content {
-  font-style: italic;
-  color: #e2c44b; /* 金黄色文本 */
-  font-family: 'Noto Serif SC', 'SimSun', serif;
-  text-shadow: 0 1px 1px rgba(0,0,0,0.1); /* 添加轻微文本阴影增强可读性 */
+  font-style: normal; /* 卦辞应为正体，去除 italic */
+  color: #f4d77e; /* 更亮眼的金色，突出卦辞 */
+  font-family: 'STKaiti', 'KaiTi', 'FZShuTi', 'HanyiSongyang', 'Noto Serif SC', 'SimSun', serif; /* 楷体/书法体优先 */
+  text-shadow: 
+    0 0 6px rgba(226, 196, 75, 0.45), /* 微弱金色发光 */
+    0 1px 2px rgba(0, 0, 0, 0.4); /* 立体阴影 */
   text-align: center;
   display: block;
+  font-weight: 700; /* 加粗，突出权威感 */
+  font-size: 1.2rem; /* 增大字体，更醒目 */
+  letter-spacing: 2px; /* 增加字间距，增强古典感 */
+  line-height: 1.8; /* 增加行高，提升可读性 */
 }
 
 /* 分析文本增强 */
@@ -5479,6 +6117,41 @@ const formatDateString = (date, format) => {
   text-align: justify;
   letter-spacing: 1px;
   text-shadow: 0 1px 1px rgba(0,0,0,0.1); /* 轻微文本阴影 */
+}
+
+/* 支付信息样式 */
+.payment-info {
+  text-align: center;
+  margin: 30px 0 20px;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+}
+
+/* 支付信息文字渐变效果 - 动态流光 */
+.payment-info span {
+  background: linear-gradient(90deg, 
+    #FFD700 0%, 
+    #1a1a1a 25%, 
+    #FFFFFF 50%, 
+    #1a1a1a 75%, 
+    #FFD700 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: inline-block;
+  animation: gradientFlow 3s linear infinite;
+}
+
+/* 流光动画 */
+@keyframes gradientFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
 }
 
 /* 落款区域 */
@@ -5910,6 +6583,148 @@ const formatDateString = (date, format) => {
 .highlight-word.bad {
   color: #833 !important;
   background-color: rgba(180, 60, 60, 0.08) !important;
+}
+
+/* 图像上传相关样式 */
+.image-upload-container {
+  background-color: #222;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #333;
+}
+
+.upload-area {
+  border: 2px dashed #444;
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-area:hover {
+  border-color: var(--primary-color);
+  background-color: rgba(230, 200, 76, 0.05);
+}
+
+.upload-area.drag-over {
+  border-color: var(--primary-color);
+  background-color: rgba(230, 200, 76, 0.1);
+  transform: scale(1.02);
+}
+
+.upload-area.has-file {
+  border-color: #666;
+  background-color: rgba(51, 51, 51, 0.3);
+}
+
+.upload-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.upload-icon {
+  font-size: 3rem;
+  color: #666;
+  transition: color 0.3s ease;
+}
+
+.upload-area:hover .upload-icon {
+  color: var(--primary-color);
+}
+
+.upload-text p {
+  margin: 5px 0;
+  color: #aaa;
+  font-size: 1rem;
+}
+
+.upload-hint {
+  font-size: 0.9rem !important;
+  color: #777 !important;
+}
+
+.image-preview-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.image-preview {
+  max-width: 100%;
+  max-height: 150px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  object-fit: contain;
+}
+
+.image-info {
+  text-align: center;
+}
+
+.file-name {
+  color: #fff;
+  font-weight: bold;
+  margin: 5px 0;
+  font-size: 0.9rem;
+}
+
+.file-size {
+  color: #aaa;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.remove-file-btn {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+}
+
+.remove-file-btn:hover {
+  background-color: #c0392b;
+  transform: scale(1.1);
+}
+
+.upload-description {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  border-left: 3px solid var(--primary-color);
+}
+
+.upload-description p {
+  margin: 0;
+  color: #aaa;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: center;
 }
 </style> 
 

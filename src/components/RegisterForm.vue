@@ -315,6 +315,8 @@ const togglePasswordVisibility = (field) => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   padding: 20px;
   background-color: var(--dark-bg);
 }

@@ -3,17 +3,25 @@ import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import ComponentTestView from '../views/ComponentTestView.vue'
+import MobileTestView from '../views/MobileTestView.vue'
 import HexagramView from '../views/HexagramView.vue'
 import ChangePasswordView from '../views/ChangePasswordView.vue'
 import HistoryView from '../views/HistoryView.vue'
 import AboutView from '../views/AboutView.vue'
 import GuideView from '../views/GuideView.vue'
 import DownloadsView from '../views/DownloadsView.vue'
+import UploadView from '../views/UploadView.vue'
 import { isAuthenticated } from '../services/api'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+  // router/index.js
+{
+  path: '/liuyao-detail',
+  name: 'LiuyaoDetail',
+  component: () => import('../views/LiuyaoDetailView.vue')
+},
     {
       path: '/',
       name: 'home',
@@ -45,9 +53,23 @@ const router = createRouter({
       component: DownloadsView
     },
     {
+      path: '/upload',
+      name: 'upload',
+      component: UploadView,
+      meta: {
+        requiresAuth: true,
+        requiresPermission: 'uploadView'
+      }
+    },
+    {
       path: '/component-test',
       name: 'component-test',
       component: ComponentTestView
+    },
+    {
+      path: '/mobile-test',
+      name: 'mobile-test',
+      component: MobileTestView
     },
     {
       path: '/account/change-password',

@@ -1,7 +1,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { getUserBalance } from '../services/api';
+import { getUserBalance, useCardKey } from '../services/api';
+import { loadPermissions, checkPermission, clearPermissions, getCurrentPermissions } from '../composables/usePermissions';
 
 // 默认头像图片路径
 const defaultAvatar = '/profile/touxiang.png'; // 图片应该放在public/profile目录下
@@ -14,6 +15,10 @@ const showUserMenu = ref(false); // 控制用户菜单的显示
 const userBalance = ref(0); // 用户余额
 const balanceLoading = ref(false); // 余额加载状态
 const showAccountSettings = ref(false); // 控制账号设置弹窗的显示
+const showRechargeModal = ref(false); // 控制充值弹窗的显示
+const rechargeCode = ref(''); // 充值卡密
+const isRefreshingBalance = ref(false); // 余额刷新状态
+const isSubmittingRecharge = ref(false); // 充值提交状态
 
 // API Key 设置相关状态
 const showApiKeySettings = ref(false); // 控制API Key设置弹窗的显示
@@ -63,9 +68,17 @@ const checkLoginStatus = () => {
       user.value = userData;
       // 获取用户余额
       fetchUserBalance();
+      // 加载用户权限
+      loadPermissions().then(() => {
+        console.log('权限加载完成:', getCurrentPermissions());
+        console.log('是否有uploadView权限:', checkPermission('uploadView'));
+      });
     } catch (e) {
       console.error('解析用户数据失败', e);
     }
+  } else {
+    // 用户未登录时清除权限信息
+    clearPermissions();
   }
 };
 
@@ -119,7 +132,10 @@ const openApiKeySettings = (event) => {
     event.stopPropagation(); // 阻止事件冒泡
   }
   showUserMenu.value = false; // 关闭用户菜单
-  loadApiKeySettings(); // 加载已保存的设置
+  
+  // 重新从 localStorage 加载已保存的设置，覆盖任何未保存的修改
+  loadApiKeySettings();
+  
   showApiKeySettings.value = true; // 显示API Key设置弹窗
 };
 
@@ -128,6 +144,9 @@ const closeApiKeySettings = () => {
   showApiKeySettings.value = false;
   showProviderDropdown.value = false;
   showModelDropdown.value = false;
+  
+  // 关闭时重新加载已保存的设置，丢弃未保存的修改
+  loadApiKeySettings();
 };
 
 // 关闭所有下拉菜单
@@ -162,6 +181,73 @@ const fetchUserBalance = async () => {
   }
 };
 
+// 刷新余额
+const refreshBalance = async (event) => {
+  if (event) {
+    event.stopPropagation();
+  }
+  
+  if (isRefreshingBalance.value) return;
+  
+  try {
+    isRefreshingBalance.value = true;
+    await fetchUserBalance();
+  } finally {
+    isRefreshingBalance.value = false;
+  }
+};
+
+// 打开充值弹窗
+const openRechargeModal = (event) => {
+  if (event) {
+    event.stopPropagation();
+  }
+  showUserMenu.value = false;
+  showRechargeModal.value = true;
+  rechargeCode.value = '';
+};
+
+// 关闭充值弹窗
+const closeRechargeModal = () => {
+  showRechargeModal.value = false;
+  rechargeCode.value = '';
+};
+
+// 提交充值卡密
+const submitRecharge = async () => {
+  if (!rechargeCode.value.trim()) {
+    alert('请输入卡密');
+    return;
+  }
+  
+  if (isSubmittingRecharge.value) return;
+  
+  try {
+    isSubmittingRecharge.value = true;
+    const response = await useCardKey(rechargeCode.value.trim());
+    
+    if (response.code === 0) {
+      // 充值成功
+      const amount = response.data?.amount || 0;
+      alert(`充值成功！已增加 ${amount.toFixed(2)} 点`);
+      
+      // 刷新余额
+      await fetchUserBalance();
+      
+      // 关闭弹窗
+      closeRechargeModal();
+    } else {
+      // 充值失败
+      alert(response.msg || '充值失败，请检查卡密是否正确');
+    }
+  } catch (error) {
+    console.error('充值出错:', error);
+    alert('充值失败，请稍后重试');
+  } finally {
+    isSubmittingRecharge.value = false;
+  }
+};
+
 // 退出登录
 const logout = () => {
   localStorage.removeItem('isLoggedIn');
@@ -170,6 +256,8 @@ const logout = () => {
   isLoggedIn.value = false;
   user.value = null;
   showUserMenu.value = false;
+  // 清除权限信息
+  clearPermissions();
   router.push('/');
 };
 
@@ -341,6 +429,8 @@ onUnmounted(() => {
       <a href="/" class="nav-link">首页</a>
       <a href="/hexagram" class="nav-link">六爻学习</a>
       <a href="/downloads" class="nav-link">资料下载</a>
+      <!-- 根据权限动态显示资料上传 -->
+      <a v-if="checkPermission('uploadView')" href="/upload" class="nav-link">资料上传</a>
       <!-- <a href="/culture" class="nav-link">传统文化</a> -->
       <a href="/about" class="nav-link">关于我们</a>
     </nav>
@@ -395,20 +485,36 @@ onUnmounted(() => {
                 <i class="balance-icon">💰</i>
                 <span>我的余额</span>
               </div>
-              <div class="balance-amount">
-                <template v-if="balanceLoading">
-                  <span class="loading-dots">加载中</span>
-                </template>
-                <template v-else>
-                  <span>{{ userBalance.toFixed(2) }}</span>
-                  <span class="currency">点</span>
-                </template>
+              <div class="balance-amount-wrapper">
+                <div class="balance-amount">
+                  <template v-if="balanceLoading">
+                    <span class="loading-dots">加载中</span>
+                  </template>
+                  <template v-else>
+                    <span>{{ userBalance.toFixed(2) }}</span>
+                    <span class="currency">点</span>
+                  </template>
+                </div>
+                <button 
+                  class="balance-action-btn refresh-btn" 
+                  @click="refreshBalance"
+                  :disabled="isRefreshingBalance"
+                  title="刷新余额"
+                >
+                  <i class="action-btn-icon" :class="{ 'spinning': isRefreshingBalance }">🔄</i>
+                </button>
               </div>
             </div>
             
             <div class="menu-divider"></div>
             
             <div class="menu-items">
+              <div class="menu-item" @click="openRechargeModal">
+                <i class="menu-icon">💳</i>
+                <span class="menu-text">充值余额</span>
+                <i class="menu-arrow">→</i>
+              </div>
+              
               <div class="menu-item" @click="openAccountSettings">
                 <i class="menu-icon">⚙️</i>
                 <span class="menu-text">账号设置</span>
@@ -510,6 +616,103 @@ onUnmounted(() => {
             <button class="change-password-btn" @click="goToChangePassword">
               <i class="action-icon">🔑</i>
               <span>修改密码</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 充值弹窗 -->
+    <div class="account-settings-overlay recharge-overlay" v-if="showRechargeModal" @click.self="closeRechargeModal">
+      <div class="recharge-dialog-premium" @click.stop>
+        <!-- 顶部光效装饰 -->
+        <div class="dialog-top-glow"></div>
+        
+        <!-- 头部区域 -->
+        <div class="recharge-header-premium">
+          <div class="header-icon-container">
+            <div class="icon-glow-effect"></div>
+            <i class="header-main-icon">💳</i>
+          </div>
+          <h2 class="recharge-main-title">账户充值</h2>
+          <p class="recharge-subtitle">为您的账户添加余额点数</p>
+          <button class="premium-close-btn" @click="closeRechargeModal">
+            <span class="close-icon">×</span>
+          </button>
+        </div>
+        
+        <!-- 内容区域 -->
+        <div class="recharge-content-premium">
+          <!-- 购买提示卡片 -->
+          <div class="purchase-info-card">
+            <div class="info-icon-wrapper">
+              <i class="info-icon">ℹ️</i>
+            </div>
+            <div class="info-text-content">
+              <p class="info-primary">请前往淘宝店铺购买充值卡密</p>
+              <a 
+                href="https://e.tb.cn/h.SwJXL97cYtBqC0b?tk=yFEFfNlrNh7" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                class="shop-link-btn"
+                @click.stop
+              >
+                <span class="btn-shine"></span>
+                <span class="btn-text">爻算云鉴官方店</span>
+                <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+          
+          <!-- 卡密输入区 -->
+          <div class="card-input-section">
+            <label class="premium-label">
+              <span class="label-text">充值卡密</span>
+              <span class="label-required">*</span>
+            </label>
+            <div class="premium-input-wrapper">
+              <input 
+                type="text" 
+                v-model="rechargeCode" 
+                class="premium-input" 
+                placeholder="请输入您购买的卡密码"
+                @keyup.enter="submitRecharge"
+                :disabled="isSubmittingRecharge"
+              />
+              <div class="input-focus-border"></div>
+            </div>
+            <p class="input-hint">输入完成后点击确认充值按钮</p>
+          </div>
+          
+          <!-- 按钮组 -->
+          <div class="premium-actions">
+            <button 
+              class="premium-primary-btn" 
+              @click="submitRecharge"
+              :disabled="isSubmittingRecharge"
+            >
+              <div class="btn-glow-layer"></div>
+              <div class="btn-content">
+                <template v-if="isSubmittingRecharge">
+                  <span class="btn-spinner"></span>
+                  <span>提交中...</span>
+                </template>
+                <template v-else>
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span>确认充值</span>
+                </template>
+              </div>
+            </button>
+            <button 
+              class="premium-secondary-btn" 
+              @click="closeRechargeModal"
+              :disabled="isSubmittingRecharge"
+            >
+              取消
             </button>
           </div>
         </div>
@@ -839,6 +1042,12 @@ onUnmounted(() => {
   margin: 10px 0;
 }
 
+.balance-amount-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .balance-label {
   display: flex;
   align-items: center;
@@ -896,6 +1105,8 @@ onUnmounted(() => {
   font-style: normal;
   margin-right: 12px;
   font-size: 16px;
+  width: 16px;
+  text-align: center;
 }
 
 .menu-text {
@@ -946,12 +1157,54 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
+  .navbar {
+    padding: 15px 20px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+  }
+  
+  .logo {
+    font-size: 1.5rem;
+    order: 1;
+  }
+  
+  .nav-links {
+    order: 2;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .nav-links a {
+    font-size: 0.9rem;
+    padding: 8px 12px;
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .auth-buttons {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+  
   .auth-actions .auth-btn span {
     display: none;
   }
   
   .auth-actions .auth-btn {
     padding: 8px;
+    min-width: 44px;
+    min-height: 44px;
   }
   
   .auth-icon {
@@ -962,13 +1215,57 @@ onUnmounted(() => {
     width: 250px;
     right: -10px;
   }
-  
+}
+
+@media (max-width: 480px) {
   .navbar {
-    padding: 15px 20px;
+    padding: 12px 15px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+  
+  .logo {
+    font-size: 1.3rem;
+    order: 1;
   }
   
   .nav-links {
-    gap: 15px;
+    order: 2;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .nav-links a {
+    font-size: 0.85rem;
+    padding: 6px 10px;
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .auth-buttons {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .auth-actions .auth-btn {
+    padding: 6px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .auth-icon {
+    font-size: 14px;
   }
 }
 
@@ -1405,5 +1702,570 @@ onUnmounted(() => {
   background-color: rgba(230, 200, 76, 0.15);
   color: var(--primary-color);
   font-weight: 500;
+}
+
+/* 余额刷新按钮样式 */
+.balance-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  font-size: 13px;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.balance-action-btn:hover:not(:disabled) {
+  background: rgba(255, 215, 0, 0.15);
+  color: var(--primary-color);
+  transform: scale(1.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.balance-action-btn:active:not(:disabled) {
+  transform: scale(1);
+}
+
+.balance-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn-icon {
+  font-style: normal;
+  transition: transform 0.3s ease;
+}
+
+.spinning {
+  animation: spin-icon 1s linear infinite;
+}
+
+@keyframes spin-icon {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.refresh-btn:hover:not(:disabled) .action-btn-icon:not(.spinning) {
+  transform: rotate(180deg);
+}
+
+/* ==================== 高级充值弹窗样式 ==================== */
+
+/* 遮罩层动画 */
+.recharge-overlay {
+  animation: overlayFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(8px);
+  }
+}
+
+/* 弹窗主容器 */
+.recharge-dialog-premium {
+  width: 480px;
+  max-width: 90vw;
+  background: linear-gradient(145deg, #0a0a0a 0%, #151515 50%, #0a0a0a 100%);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 
+    0 25px 50px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 215, 0, 0.1),
+    0 0 60px rgba(255, 215, 0, 0.05);
+  animation: dialogSlideIn 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+  position: relative;
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 顶部光效 */
+.dialog-top-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: radial-gradient(ellipse at top, rgba(255, 215, 0, 0.12) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 头部区域 */
+.recharge-header-premium {
+  padding: 32px 32px 24px;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.header-icon-container {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 20px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-glow-effect {
+  position: absolute;
+  inset: -8px;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.25) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+.header-main-icon {
+  font-size: 40px;
+  filter: drop-shadow(0 4px 12px rgba(255, 215, 0, 0.4));
+  position: relative;
+  z-index: 1;
+}
+
+.recharge-main-title {
+  margin: 0 0 8px;
+  font-size: 26px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.5px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.recharge-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 400;
+  letter-spacing: 0.3px;
+}
+
+.premium-close-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.premium-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: rotate(90deg);
+}
+
+.close-icon {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 300;
+  line-height: 1;
+  transition: color 0.3s ease;
+}
+
+.premium-close-btn:hover .close-icon {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 内容区域 */
+.recharge-content-premium {
+  padding: 0 32px 32px;
+}
+
+/* 购买提示卡片 */
+.purchase-info-card {
+  display: flex;
+  gap: 14px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.06) 0%, rgba(255, 215, 0, 0.02) 100%);
+  border-radius: 12px;
+  margin-bottom: 28px;
+  border: 1px solid rgba(255, 215, 0, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+}
+
+.purchase-info-card:hover {
+  border-color: rgba(255, 215, 0, 0.2);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.info-icon-wrapper {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 215, 0, 0.1);
+  border-radius: 10px;
+}
+
+.info-icon {
+  font-size: 20px;
+  filter: drop-shadow(0 2px 4px rgba(255, 215, 0, 0.3));
+}
+
+.info-text-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+}
+
+.info-primary {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.5;
+}
+
+.info-secondary {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+}
+
+.shop-highlight {
+  color: var(--primary-color);
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+}
+
+/* 店铺链接按钮 */
+.shop-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  margin-top: 8px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.08) 0%, rgba(255, 215, 0, 0.04) 100%);
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  border-radius: 20px;
+  color: var(--primary-color);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    0 0 0 0 rgba(255, 215, 0, 0);
+  letter-spacing: 0.3px;
+}
+
+.shop-link-btn:hover {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 215, 0, 0.08) 100%);
+  border-color: rgba(255, 215, 0, 0.5);
+  transform: scale(1.04);
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.25),
+    0 0 20px rgba(255, 215, 0, 0.3);
+  color: #fff;
+}
+
+.shop-link-btn:active {
+  transform: scale(1.01);
+  box-shadow: 
+    0 2px 6px rgba(0, 0, 0, 0.2),
+    0 0 12px rgba(255, 215, 0, 0.2);
+}
+
+/* 按钮光泽效果 */
+.btn-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.shop-link-btn:hover .btn-shine {
+  left: 100%;
+}
+
+.btn-text {
+  position: relative;
+  z-index: 1;
+}
+
+.btn-arrow {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.shop-link-btn:hover .btn-arrow {
+  transform: translate(2px, -2px);
+}
+
+/* 卡密输入区 */
+.card-input-section {
+  margin-bottom: 28px;
+}
+
+.premium-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.label-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.3px;
+}
+
+.label-required {
+  color: #ff6b6b;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.premium-input-wrapper {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.premium-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.premium-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.premium-input:focus {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 215, 0, 0.4);
+  box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.08);
+}
+
+.premium-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-focus-border {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.premium-input:focus + .input-focus-border {
+  border-color: rgba(255, 215, 0, 0.3);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.15);
+}
+
+.input-hint {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  padding-left: 4px;
+}
+
+/* 按钮组 */
+.premium-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* 主要按钮（确认充值） */
+.premium-primary-btn {
+  flex: 2;
+  position: relative;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #ffd700 0%, #ffb700 100%);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 
+    0 4px 12px rgba(255, 215, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.premium-primary-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 6px 20px rgba(255, 215, 0, 0.4),
+    0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.premium-primary-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.premium-primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-glow-layer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.premium-primary-btn:hover:not(:disabled) .btn-glow-layer {
+  opacity: 1;
+}
+
+.btn-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #000;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.btn-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.5;
+}
+
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* 次要按钮（取消） */
+.premium-secondary-btn {
+  flex: 1;
+  padding: 14px 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.premium-secondary-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  transform: translateY(-2px);
+}
+
+.premium-secondary-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.premium-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 响应式优化 */
+@media (max-width: 540px) {
+  .recharge-dialog-premium {
+    width: 95vw;
+    border-radius: 16px;
+  }
+  
+  .recharge-header-premium {
+    padding: 24px 24px 20px;
+  }
+  
+  .recharge-content-premium {
+    padding: 0 24px 24px;
+  }
+  
+  .recharge-main-title {
+    font-size: 22px;
+  }
+  
+  .premium-actions {
+    flex-direction: column;
+  }
+  
+  .premium-primary-btn,
+  .premium-secondary-btn {
+    flex: 1;
+  }
 }
 </style> 

@@ -1,0 +1,151 @@
+/* 移动端样式修复文件 - 保持与电脑端完全一致的布局 */
+
+/* 重要说明：
+ * 保持所有组件在手机端的布局与电脑端完全一致
+ * 只调整必要的宽度、间距和触摸优化
+ * 不改变任何组件的内部排列方式
+ */
+
+@media (max-width: 768px) {
+  /* HomeView容器修复 - 只调整宽度，保持原有布局 */
+  .home-view {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+  
+  /* HeroSection修复 - 只调整宽度和内边距 */
+  .hero-section {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    padding-left: 15px !important;
+    padding-right: 15px !important;
+    box-sizing: border-box !important;
+  }
+  
+  .hero-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    padding-left: 15px !important;
+    padding-right: 15px !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* FeatureCards修复 - 保持3列网格，只调整宽度 */
+  .features-section {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    padding-left: 15px !important;
+    padding-right: 15px !important;
+    box-sizing: border-box !important;
+  }
+  
+  .features-grid {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    box-sizing: border-box !important;
+    /* 保持3列网格，与电脑端一致 */
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  
+  .feature-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* NavBar修复 - 保持水平布局，只调整宽度 */
+  .navbar {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    box-sizing: border-box !important;
+    /* 保持水平布局，与电脑端一致 */
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+  
+  /* 全局容器修复 */
+  .container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    padding-left: 15px !important;
+    padding-right: 15px !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* 防止水平滚动 */
+  body, html {
+    overflow-x: hidden !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* 超小屏幕的额外修复 - 只调整内边距 */
+  .hero-section {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  
+  .hero-container {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  
+  .features-section {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  
+  .container {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  
+  .navbar {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}
+
+/* 确保所有文本在移动端都能正确换行 */
+@media (max-width: 768px) {
+  .hero-title,
+  .hero-subtitle,
+  .feature-title,
+  .feature-description {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto !important;
+  }
+}
+
+/* 移动端触摸优化 */
+@media (max-width: 768px) {
+  .hero-btn,
+  .feature-card,
+  .feature-link,
+  .nav-link {
+    min-height: 44px !important;
+    min-width: 44px !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: rgba(230, 200, 76, 0.3) !important;
+  }
+}
+
+/* 防止移动端缩放 */
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}

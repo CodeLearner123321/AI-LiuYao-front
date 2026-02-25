@@ -2023,6 +2023,8 @@ const formatDateTime = (timestamp) => {
 <style scoped>
 .hexagram-view {
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   background-color: var(--dark-bg);
   color: var(--text-light);
 }

@@ -180,11 +180,23 @@ body {
   color: var(--text-light);
   width: 100%;
   overflow-x: hidden;
+  /* 修复 iOS 地址栏折叠造成的视口跳变 */
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  /* 移动端优化 */
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .app-container {
   width: 100%;
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -212,6 +224,40 @@ body {
 
 .btn:hover {
   opacity: 0.9;
+}
+
+/* 移动端响应式设计 */
+@media (max-width: 768px) {
+  .container {
+    padding: 0 15px;
+  }
+  
+  body {
+    font-size: 14px;
+  }
+  
+  /* 确保所有内容在移动端都有合适的宽度 */
+  .content-hidden {
+    opacity: 0.3;
+    pointer-events: none;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0 10px;
+  }
+  
+  body {
+    font-size: 13px;
+  }
+  
+  /* 超小屏幕的额外优化 */
+  .content-hidden {
+    padding: 0 10px;
+  }
 }
 
 /* Element Plus样式覆盖 */

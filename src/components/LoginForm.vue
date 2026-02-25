@@ -3,6 +3,7 @@ import { ref, computed, reactive } from 'vue';
 import { login } from '../services/api';
 import { useRouter } from 'vue-router';
 import { userStateHMR } from '../services/hmrService';
+import { loadPermissions } from '../composables/usePermissions';
 
 const router = useRouter();
 const username = ref('');
@@ -61,6 +62,14 @@ const handleLogin = async () => {
       console.log('更新用户状态为:', userData);
       userStateHMR.updateUserState(userData);
       console.log('用户状态已更新，准备跳转到首页');
+      
+      // 获取用户权限信息
+      try {
+        await loadPermissions();
+        console.log('用户权限信息已加载');
+      } catch (permissionError) {
+        console.error('加载权限信息失败:', permissionError);
+      }
       
       // 手动分发登录成功事件
       window.dispatchEvent(new Event('login-success'));
@@ -185,6 +194,8 @@ const togglePasswordVisibility = () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   padding: 20px;
   background-color: var(--dark-bg);
 }

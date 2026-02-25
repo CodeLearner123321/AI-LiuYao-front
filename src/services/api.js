@@ -2,8 +2,8 @@ import axios from 'axios';
 
 // 创建axios实例
 const api = axios.create({
-  // baseURL: 'http://localhost:8080',
-  baseURL: 'http://ysyj.cloud:8080',
+  baseURL: 'http://localhost:8080',
+  // baseURL: 'http://ysyj.cloud:8080',
   headers: {
     'Content-Type': 'application/json'
   }
@@ -300,6 +300,67 @@ export const sendEmailCode = async (email, requestType = "SIGN_IN") => {
         return {
           code: 500,
           msg: '验证码发送失败，请稍后再试',
+          data: null
+        };
+      }
+      throw error.response.data;
+    }
+    throw error;
+  }
+};
+
+// 获取用户权限信息
+export const getUserPermissions = async () => {
+  try {
+    const response = await api.get('/api/liuyao/permissions');
+    return response.data;
+  } catch (error) {
+    console.error('获取用户权限失败:', error);
+    throw error;
+  }
+};
+
+// 检查用户是否有特定权限
+export const hasPermission = (permission) => {
+  const permissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
+  return permissions.viewPermissions && permissions.viewPermissions.includes(permission);
+};
+
+// 检查用户角色
+export const getUserRole = () => {
+  const permissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
+  return permissions.role || 0;
+};
+
+// 使用卡密充值
+export const useCardKey = async (cardCode) => {
+  try {
+    const response = await api.post('/api/cardkey/use', { cardCode });
+    // 适配接口格式
+    return {
+      code: response.data.code,
+      msg: response.data.message || response.data.msg,
+      data: response.data.data
+    };
+  } catch (error) {
+    if (error.response) {
+      // 处理错误响应
+      if (error.response.status === 400) {
+        return {
+          code: 400,
+          msg: error.response.data.message || '卡密格式不正确',
+          data: null
+        };
+      } else if (error.response.status === 401) {
+        return {
+          code: 401,
+          msg: '未登录或登录已过期',
+          data: null
+        };
+      } else if (error.response.status === 500) {
+        return {
+          code: 500,
+          msg: '服务器内部错误',
           data: null
         };
       }

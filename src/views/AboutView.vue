@@ -4,6 +4,8 @@ import { ref, onMounted } from 'vue';
 
 // 页面切换效果
 const showContent = ref(false);
+// 检查是否是第一次访问（在当前会话中）
+const isFirstVisit = ref(true);
 // 跟踪各个部分的可见性，用于实现滚动显示动画
 const sectionVisible = ref({
   intro: true,
@@ -82,6 +84,18 @@ const maskApiKey = (key) => {
 };
 
 onMounted(() => {
+  // 检查sessionStorage中是否有访问记录
+  const hasVisited = sessionStorage.getItem('aboutPageVisited');
+  
+  if (hasVisited) {
+    // 不是第一次访问，使用快速动画
+    isFirstVisit.value = false;
+  } else {
+    // 第一次访问，标记为已访问
+    sessionStorage.setItem('aboutPageVisited', 'true');
+    isFirstVisit.value = true;
+  }
+  
   // 页面加载后显示内容，触发淡入效果
   setTimeout(() => {
     showContent.value = true;
@@ -123,9 +137,9 @@ onMounted(() => {
             <div class="hexagram-line"></div>
           </div> -->
           
-          <div class="poetry-container">
+          <div class="poetry-container" :class="{ 'quick-show': !isFirstVisit }">
             <div class="line-wrapper" v-for="(line, index) in philosophyLines" :key="index">
-              <div class="line" :style="{ animationDelay: `${index * 0.8}s` }">{{ line }}</div>
+              <div class="line" :class="{ 'first-visit': isFirstVisit }" :style="isFirstVisit ? { animationDelay: `${index * 0.8}s` } : {}">{{ line }}</div>
             </div>
           </div>
           
@@ -160,6 +174,8 @@ onMounted(() => {
 .about-view {
   background-color: var(--dark-bg);
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   position: relative;
   overflow-x: hidden;
 }
@@ -249,14 +265,32 @@ onMounted(() => {
   font-weight: 300;
   letter-spacing: 2px;
   position: relative;
-  transform: translateY(50px);
-  opacity: 0;
-  animation: fadeUp 3s ease forwards;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   font-family: "Ma Shan Zheng", "STKaiti", "KaiTi", "楷体", "FangSong", "仿宋", serif;
 }
 
+/* 第一次访问的慢动画 */
+.line.first-visit {
+  transform: translateY(50px);
+  opacity: 0;
+  animation: fadeUp 3s ease forwards;
+}
+
+/* 非第一次访问的快速淡入动画 */
+.poetry-container.quick-show .line {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: quickFadeIn 0.6s ease forwards;
+}
+
 @keyframes fadeUp {
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes quickFadeIn {
   to {
     transform: translateY(0);
     opacity: 1;

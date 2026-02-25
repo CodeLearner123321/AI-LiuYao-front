@@ -352,6 +352,8 @@ onMounted(() => {
 <style scoped>
 .guide-container {
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   background-color: var(--dark-bg);
   color: var(--text-light);
   position: relative;
@@ -381,6 +383,8 @@ onMounted(() => {
   left: 0;
   top: 70px; /* NavBar高度，根据实际调整 */
   height: calc(100vh - 70px);
+  height: calc(100svh - 70px);
+  height: calc(100dvh - 70px);
   overflow-y: auto;
   padding: 20px;
   background-color: var(--dark-bg);
@@ -761,6 +765,8 @@ onMounted(() => {
     top: 0;
     left: -250px;
     height: 100vh;
+    height: 100svh;
+    height: 100dvh;
     z-index: 1000;
     box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
     padding-top: 70px;
