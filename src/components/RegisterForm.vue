@@ -193,7 +193,7 @@ const togglePasswordVisibility = (field) => {
     <div class="register-box">
       <div class="logo-container">
         <img src="/images/favicon.png" alt="logo" class="logo-icon">
-        <span class="logo-text">爻算云鉴</span>
+        <span class="logo-text">OpenLiuYao</span>
       </div>
       
       <h2 class="register-title">您所在地区仅支持邮箱注册</h2>
@@ -345,8 +345,14 @@ const togglePasswordVisibility = (field) => {
 
 .logo-text {
   font-size: 28px;
-  font-weight: bold;
-  color: var(--primary-color);
+  font-weight: 800;
+  line-height: 1;
+  color: transparent;
+  background: linear-gradient(100deg, #fff5c7 0%, var(--primary-color) 55%, #c69a34 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 18px rgba(230, 200, 76, 0.18);
 }
 
 .register-title {
@@ -552,6 +558,19 @@ const togglePasswordVisibility = (field) => {
 @media (max-width: 480px) {
   .register-box {
     padding: 30px 20px;
+  }
+}
+
+/* 新增：极窄屏（< 360px）验证码按钮自适应，防止挤压输入框 */
+@media (max-width: 360px) {
+  .verification-container {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .send-code-btn {
+    min-width: auto;
+    width: 100%;
   }
 }
 </style> 

@@ -51,7 +51,7 @@ const philosophyLines = [
   "不是为命运下断言，",
   "而是让每个人都能用数据的视角，",
   "重新理解这份古老的智慧。",
-  "爻算云鉴唯一官方交流群：711651770",
+  "OpenLiuYao唯一官方交流群：711651770",
   "欢迎入群交流反馈"
 ];
 
@@ -156,7 +156,7 @@ onMounted(() => {
         <!-- 页脚 -->
         <footer class="about-footer">
           <div class="footer-content">
-            <p>© 2025 爻算云鉴 - 传统文化智能研究平台</p>
+            <p>© 2025 OpenLiuYao - 传统文化智能研究平台</p>
             <p class="footer-note">本网站内容仅供文化学习和研究目的，不作为任何决策依据</p>
           </div>
         </footer>

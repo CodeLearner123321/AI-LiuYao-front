@@ -2187,9 +2187,10 @@ const isYangYao = (yaos, index) => {
   }
 
   .history-content {
-    height: calc(100vh - 300px - 60px);
-    height: calc(100svh - 300px - 60px);
-    height: calc(100dvh - 300px - 60px);
+    /* 修改：改用 flex:1 让内容区自动占满剩余空间，不依赖硬编码高度 */
+    flex: 1;
+    height: auto;
+    min-height: 200px;
     padding: 20px;
   }
   
@@ -2212,10 +2213,34 @@ const isYangYao = (yaos, index) => {
   .hexagram-pair {
     gap: 20px;
     padding: 15px;
+    /* 修改：允许两列卦象在窄屏换行为纵向排列 */
+    flex-wrap: wrap;
+    justify-content: center;
   }
-  
+
+  /* 修改：换行后每列卦象撑满容器宽度 */
+  .hexagram-column {
+    width: 100%;
+  }
+
   .hexagram-lines {
-    width: 150px;
+    /* 修改：换行后卦象表格撑满列宽，不再固定像素 */
+    width: 100%;
+    max-width: 200px;
+  }
+
+  /* 修改：inline-marks 在窄屏改为静态流内布局，防止 right:-39px 溢出 */
+  .inline-marks {
+    position: static;
+    display: inline-flex;
+    transform: none;
+    margin-top: 2px;
+    font-size: 0.75rem;
+  }
+
+  /* 新增：result-table 在窄屏支持横向滚动 */
+  .hexagram-lines {
+    overflow-x: auto;
   }
 }
 

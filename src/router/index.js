@@ -2,8 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
-import ComponentTestView from '../views/ComponentTestView.vue'
-import MobileTestView from '../views/MobileTestView.vue'
 import HexagramView from '../views/HexagramView.vue'
 import ChangePasswordView from '../views/ChangePasswordView.vue'
 import HistoryView from '../views/HistoryView.vue'
@@ -60,16 +58,6 @@ const router = createRouter({
         requiresAuth: true,
         requiresPermission: 'uploadView'
       }
-    },
-    {
-      path: '/component-test',
-      name: 'component-test',
-      component: ComponentTestView
-    },
-    {
-      path: '/mobile-test',
-      name: 'mobile-test',
-      component: MobileTestView
     },
     {
       path: '/account/change-password',

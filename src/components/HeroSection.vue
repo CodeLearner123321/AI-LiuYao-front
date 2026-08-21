@@ -14,7 +14,9 @@ const goToHexagram = () => {
 <template>
   <section class="hero-section">
     <div class="container hero-container">
-      <h1 class="hero-title">爻算云鉴</h1>
+      <h1 class="hero-title" aria-label="OpenLiuYao">
+        <span class="brand-open">Open</span><span class="brand-core">LiuYao</span>
+      </h1>
       <p class="hero-subtitle">基于深度学习的人工智能平台，对中国古代决策符号系统进行结构化解析，为公众开放互动式探索功能，以直观数据呈现古代智慧精髓，恪守学术规范，杜绝封建迷信。</p>
       <div class="hero-cta">
         <a @click="goToHexagram" class="btn hero-btn">开始体验</a>
@@ -55,15 +57,39 @@ const goToHexagram = () => {
 
 .hero-title {
   font-size: 3.5rem;
-  color: var(--primary-color);
+  color: transparent;
+  background: linear-gradient(100deg, #fff7d7 0%, var(--primary-color) 44%, #c69a34 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
   margin-bottom: 20px;
-  font-weight: bold;
+  font-weight: 800;
+  line-height: 1.05;
+  text-shadow: 0 0 28px rgba(230, 200, 76, 0.22);
+}
+
+.brand-open {
+  font-weight: 650;
+}
+
+.brand-core {
+  color: inherit;
+}
+
+.hero-title::after {
+  content: '';
+  display: block;
+  width: 96px;
+  height: 2px;
+  margin: 18px auto 0;
+  background: linear-gradient(90deg, transparent, rgba(230, 200, 76, 0.86), transparent);
 }
 
 .hero-subtitle {
   font-size: 1.2rem;
   color: var(--text-light);
-  margin-bottom: 40px;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto 40px;
   line-height: 1.6;
   opacity: 0.9;
 }

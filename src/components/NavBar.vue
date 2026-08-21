@@ -420,7 +420,7 @@ onUnmounted(() => {
     <div class="logo">
       <a href="/">
         <img src="/images/favicon.png" alt="logo" class="logo-icon">
-        <span class="logo-text">爻算云鉴</span>
+        <span class="logo-text">OpenLiuYao</span>
       </a>
     </div>
 
@@ -658,7 +658,7 @@ onUnmounted(() => {
                 @click.stop
               >
                 <span class="btn-shine"></span>
-                <span class="btn-text">爻算云鉴官方店</span>
+                <span class="btn-text">OpenLiuYao官方店</span>
                 <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
@@ -839,8 +839,14 @@ onUnmounted(() => {
 
 .logo-text {
   font-size: 20px;
-  font-weight: bold;
-  color: var(--primary-color);
+  font-weight: 800;
+  line-height: 1;
+  color: transparent;
+  background: linear-gradient(100deg, #fff5c7 0%, var(--primary-color) 55%, #c69a34 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 16px rgba(230, 200, 76, 0.16);
 }
 
 .nav-links {
@@ -1214,6 +1220,8 @@ onUnmounted(() => {
   .user-dropdown-menu {
     width: 250px;
     right: -10px;
+    /* 新增：确保下拉菜单不超出视口宽度 */
+    max-width: calc(100vw - 20px);
   }
 }
 

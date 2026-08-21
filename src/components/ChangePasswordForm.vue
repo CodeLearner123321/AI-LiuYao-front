@@ -195,7 +195,7 @@ const togglePasswordVisibility = (field) => {
     <div class="change-password-box">
       <div class="logo-container">
         <img src="/images/favicon.png" alt="logo" class="logo-icon">
-        <span class="logo-text">爻算云鉴</span>
+        <span class="logo-text">OpenLiuYao</span>
       </div>
       
       <h2 class="change-password-title">修改密码</h2>
@@ -346,8 +346,14 @@ const togglePasswordVisibility = (field) => {
 
 .logo-text {
   font-size: 28px;
-  font-weight: bold;
-  color: var(--primary-color);
+  font-weight: 800;
+  line-height: 1;
+  color: transparent;
+  background: linear-gradient(100deg, #fff5c7 0%, var(--primary-color) 55%, #c69a34 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 18px rgba(230, 200, 76, 0.18);
 }
 
 .change-password-title {

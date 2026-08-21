@@ -401,7 +401,8 @@ onMounted(() => {
 
 .downloads-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  /* 修改：将 minmax 最小值从 350px 降至 280px，避免 280~768px 区间横向溢出 */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 30px;
   margin-top: 40px;
 }
@@ -557,6 +558,9 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  /* 新增：长书名时允许文件大小标签换行，防止极窄宽度下溢出 */
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .book-title {

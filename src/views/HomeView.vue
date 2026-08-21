@@ -24,7 +24,7 @@ import FeatureCards from '../components/FeatureCards.vue'
           </a>
         </div>
         <div class="copyright">
-          © 2025 爻算云鉴 - 传统文化智能研究平台
+          © 2025 OpenLiuYao - 传统文化智能研究平台
         </div>
       </div>
     </footer>

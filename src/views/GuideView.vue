@@ -153,11 +153,11 @@ onMounted(() => {
       <div class="guide-content" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
         <div class="guide-main">
           <div class="guide-section" id="introduction">
-            <h1>爻算云鉴使用指南</h1>
-            <p class="guide-intro">爻算云鉴是一款基于深度学习的人工智能平台，对中国古代决策符号系统进行结构化解析，为公众开放互动式探索功能，以直观数据呈现古代智慧精髓，恪守学术规范，杜绝封建迷信。</p>
+            <h1>OpenLiuYao使用指南</h1>
+            <p class="guide-intro">OpenLiuYao是一款基于深度学习的人工智能平台，对中国古代决策符号系统进行结构化解析，为公众开放互动式探索功能，以直观数据呈现古代智慧精髓，恪守学术规范，杜绝封建迷信。</p>
             
             <h2>产品介绍</h2>
-            <p>爻算云鉴将传统易学与现代人工智能技术相结合，通过对大量古籍文献的学习和分析，构建了一套智能化的六爻预测分析系统。本平台旨在以科学、客观的方式呈现中国传统文化的智慧，帮助用户在面对决策时获得新的思考角度。</p>
+            <p>OpenLiuYao将传统易学与现代人工智能技术相结合，通过对大量古籍文献的学习和分析，构建了一套智能化的六爻预测分析系统。本平台旨在以科学、客观的方式呈现中国传统文化的智慧，帮助用户在面对决策时获得新的思考角度。</p>
             
             <div class="feature-box">
               <div class="feature-item">
@@ -186,7 +186,7 @@ onMounted(() => {
           
           <div class="guide-section" id="getting-started">
             <h2>快速开始</h2>
-            <p>使用爻算云鉴非常简单，只需几个步骤即可获得专业的六爻分析：</p>
+            <p>使用OpenLiuYao非常简单，只需几个步骤即可获得专业的六爻分析：</p>
             
             <div class="steps-container">
               <div class="step-item">
@@ -229,7 +229,7 @@ onMounted(() => {
           
           <div class="guide-section" id="hexagram-guide">
             <h2>六爻起卦指南</h2>
-            <p>爻算云鉴提供三种起卦方式，您可以根据个人偏好选择：</p>
+            <p>OpenLiuYao提供三种起卦方式，您可以根据个人偏好选择：</p>
             
                         <div class="subsection" id="manual-casting">
               <h3>手动起卦（推荐）</h3>
@@ -305,7 +305,7 @@ onMounted(() => {
             </div>
             
             <div class="note-box">
-              <p><strong>注意：</strong>分析结果仅供参考，不应作为唯一决策依据。爻算云鉴提倡理性思考，反对迷信。</p>
+              <p><strong>注意：</strong>分析结果仅供参考，不应作为唯一决策依据。OpenLiuYao提倡理性思考，反对迷信。</p>
             </div>
           </div>
           
@@ -324,8 +324,8 @@ onMounted(() => {
             <h2>常见问题</h2>
             
             <div class="faq-item">
-              <h4>Q: 使用爻算云鉴需要付费吗？</h4>
-              <p>A: 爻算云鉴开源且免费，需要用户自行提供大语言模型key</p>
+              <h4>Q: 使用OpenLiuYao需要付费吗？</h4>
+              <p>A: OpenLiuYao开源且免费，需要用户自行提供大语言模型key</p>
             </div>
             
             <div class="faq-item">
@@ -339,8 +339,8 @@ onMounted(() => {
             </div>
             
             <div class="faq-item">
-              <h4>Q: 爻算云鉴的分析结果有科学依据吗？</h4>
-              <p>A: 爻算云鉴基于传统易学理论和现代AI技术，提供的是对传统文化的一种解读和呈现。我们鼓励用户理性看待分析结果，将其作为决策参考而非绝对依据。</p>
+              <h4>Q: OpenLiuYao的分析结果有科学依据吗？</h4>
+              <p>A: OpenLiuYao基于传统易学理论和现代AI技术，提供的是对传统文化的一种解读和呈现。我们鼓励用户理性看待分析结果，将其作为决策参考而非绝对依据。</p>
             </div>
           </div>
         </div>

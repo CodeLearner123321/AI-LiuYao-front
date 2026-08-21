@@ -85,4 +85,13 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 新增：防止全局横向溢出 */
+  overflow-x: hidden;
+}
+
+/* 新增：移动端覆盖过大的 section-gap 变量 */
+@media (max-width: 768px) {
+  :root {
+    --section-gap: 40px;
+  }
 }

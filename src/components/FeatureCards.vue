@@ -37,7 +37,7 @@ const closeModal = () => {
           </div>
           <h3 class="feature-title">使用说明</h3>
           <p class="feature-description">
-            详细了解爻算云鉴的功能和使用方法，快速上手六爻分析系统
+            详细了解OpenLiuYao的功能和使用方法，快速上手六爻分析系统
           </p>
           <a @click.prevent="goToGuide" class="feature-link">立即查看 →</a>
         </div>
